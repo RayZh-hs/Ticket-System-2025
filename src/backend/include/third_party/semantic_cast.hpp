@@ -2,8 +2,8 @@
 
 #include <string>
 #include <stdexcept>
-#include <algorithm> // For std::transform
-#include <iomanip>   // For std::boolalpha
+#include <iomanip>
+#include <type_traits>
 
 namespace norb
 {
@@ -23,9 +23,8 @@ namespace norb
         }
     }
 
-    // Specializations
-    template <>
-    inline int semantic_cast<int>(const std::string& s) {
+    template <typename T> requires std::is_integral_v<T>
+    inline T semantic_cast(const std::string& s) {
         if (s.empty()) {
             return 0; // Empty string means 0
         }

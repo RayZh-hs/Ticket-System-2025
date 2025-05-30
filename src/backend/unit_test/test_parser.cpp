@@ -110,7 +110,7 @@ void test_parser_valid_inputs() {
     ticket::Instruction inst;
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("100 my_cmd -a -b val_b -c");
+    inst = ticket::Parser::parse("[100] my_cmd -a -b val_b -c");
     TEST_ASSERT(inst.timestamp == 100);
     TEST_ASSERT(inst.command == "my_cmd");
     TEST_ASSERT(inst.kwargs.size() == 3);
@@ -121,13 +121,13 @@ void test_parser_valid_inputs() {
     }
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("0 another_cmd");
+    inst = ticket::Parser::parse("[0] another_cmd");
     TEST_ASSERT(inst.timestamp == 0);
     TEST_ASSERT(inst.command == "another_cmd");
     TEST_ASSERT(inst.kwargs.empty());
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("  123   spaced_cmd   -x   val_for_x  ");
+    inst = ticket::Parser::parse("  [123]   spaced_cmd   -x   val_for_x  ");
     TEST_ASSERT(inst.timestamp == 123);
     TEST_ASSERT(inst.command == "spaced_cmd");
     TEST_ASSERT(inst.kwargs.size() == 1);
@@ -181,7 +181,7 @@ void test_registry_dispatch_valid() {
     ticket::Instruction inst;
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("101 query_ticket -s -d TestD -p 123");
+    inst = ticket::Parser::parse("[101] query_ticket -s -d TestD -p 123");
     registry.dispatch(inst);
     TEST_ASSERT(g_s_flag == 1);
     TEST_ASSERT(g_t_flag == 0);
@@ -189,7 +189,7 @@ void test_registry_dispatch_valid() {
     TEST_ASSERT(g_p_value == 123);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("102 query_ticket -d AnotherD");
+    inst = ticket::Parser::parse("[102] query_ticket -d AnotherD");
     registry.dispatch(inst);
     TEST_ASSERT(g_s_flag == 0);
     TEST_ASSERT(g_t_flag == 0);
@@ -197,33 +197,33 @@ void test_registry_dispatch_valid() {
     TEST_ASSERT(g_p_value == 0);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("201 user_profile -u TestUser -i 789 -a");
+    inst = ticket::Parser::parse("[201] user_profile -u TestUser -i 789 -a");
     registry.dispatch(inst);
     TEST_ASSERT(g_username == "TestUser");
     TEST_ASSERT(g_id_val == 789);
     TEST_ASSERT(g_active_flag == true);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("202 user_profile -u OtherUser -i 1011");
+    inst = ticket::Parser::parse("[202] user_profile -u OtherUser -i 1011");
     registry.dispatch(inst);
     TEST_ASSERT(g_username == "OtherUser");
     TEST_ASSERT(g_id_val == 1011);
     TEST_ASSERT(g_active_flag == false);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("301 no_args");
+    inst = ticket::Parser::parse("[301] no_args");
     registry.dispatch(inst);
     TEST_ASSERT(g_no_args_called == true);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("401 config");
+    inst = ticket::Parser::parse("[401] config");
     registry.dispatch(inst);
     TEST_ASSERT(g_setting == "default_s");
     TEST_ASSERT(g_level == 99);
     TEST_ASSERT(g_verbose_flag == false);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("402 config -s CustomS -v");
+    inst = ticket::Parser::parse("[402] config -s CustomS -v");
     registry.dispatch(inst);
     TEST_ASSERT(g_setting == "CustomS");
     TEST_ASSERT(g_level == 99);
@@ -241,24 +241,24 @@ void test_registry_dispatch_errors() {
     ticket::Instruction inst;
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("999 unknown_cmd -x");
+    inst = ticket::Parser::parse("[999] unknown_cmd -x");
     TEST_THROWS(registry.dispatch(inst), std::runtime_error);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("100 needs_arg"); // -d is missing
+    inst = ticket::Parser::parse("[100] needs_arg"); // -d is missing
     TEST_THROWS(registry.dispatch(inst), std::runtime_error);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("101 needs_arg -d ValueForD"); // Successful call
+    inst = ticket::Parser::parse("[101] needs_arg -d ValueForD"); // Successful call
     registry.dispatch(inst);
     TEST_ASSERT(g_needs_arg_d_value == "ValueForD");
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("200 needs_int -p not_an_int");
+    inst = ticket::Parser::parse("[200] needs_int -p not_an_int");
     TEST_THROWS(registry.dispatch(inst), std::runtime_error);
 
     reset_mock_globals();
-    inst = ticket::Parser::parse("201 needs_int -p 12345"); // Successful call
+    inst = ticket::Parser::parse("[201] needs_int -p 12345"); // Successful call
     registry.dispatch(inst);
     TEST_ASSERT(g_needs_int_p_value == 12345);
 }

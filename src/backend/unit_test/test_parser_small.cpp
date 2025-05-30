@@ -27,8 +27,8 @@ int main()
     });
     cmdr.register_command("print", print, {});
 
-    cmdr.dispatch(ticket::Parser::parse("0 print"));
-    cmdr.dispatch(ticket::Parser::parse("1 incr -b -a -x 5"));
-    cmdr.dispatch(ticket::Parser::parse("2 incr -a -x 1"));
-    cmdr.dispatch(ticket::Parser::parse("3 print"));
+    cmdr.dispatch(ticket::Parser::parse("[0] print"));
+    cmdr.dispatch(ticket::Parser::parse("[1] incr -b -a -x 5"));
+    cmdr.dispatch(ticket::Parser::parse("[2] incr -a -x 1"));
+    cmdr.dispatch(ticket::Parser::parse("[3] print"));
 }

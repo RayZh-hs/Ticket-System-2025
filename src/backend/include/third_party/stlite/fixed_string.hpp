@@ -34,6 +34,10 @@ namespace norb
             return strcmp(str, other.str) != 0;
         }
 
+        bool operator == (const FixedString& other) const {
+            return strcmp(str, other.str) == 0;
+        }
+
         auto operator<=>(const FixedString& other) const
         {
             return strcmp(str, other.str) <=> 0;
@@ -53,7 +57,7 @@ namespace norb
     template <size_t max_len>
     std::ostream& operator <<(std::ostream& os, const FixedString<max_len>& fixed_string)
     {
-        const std::string s = fixed_string;
+        const auto s = std::string(fixed_string);
         os << s;
         return os;
     }

@@ -259,7 +259,7 @@ namespace norb
         inline void remove_associated()
         {
             std::remove(settings::PMEM_FILE_NAME.c_str());
-            std::remove((settings::PMEM_FILE_NAME + ".config").c_str());
+            std::remove(settings::NPMEM_FILE_NAME.c_str());
             std::remove("persistent.config");
         }
     }; // namespace chore

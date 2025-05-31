@@ -8,6 +8,7 @@
 #include <cstring>
 #include <ostream>
 #include <stdexcept>
+#include "ntraits.hpp"
 
 namespace norb {
   // Forward declarations
@@ -539,7 +540,7 @@ namespace norb {
     friend std::ostream &operator<< <>(std::ostream &os, const vector<T> &vec);
   };
 
-  template <typename T>
+  template <typename T> requires Ostreamable<T>
   std::ostream &operator<<(std::ostream &os, const vector<T> &vec) {
     os << "[";
     for (size_t i = 0; i < vec.cur_size; ++i) {

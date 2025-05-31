@@ -53,11 +53,11 @@ namespace norb {
         }
     } // namespace impl
 
-    template <typename idx_t_, typename val_t> class BPlusTree {
+    template <typename idx_t, typename val_t> class BPlusTree {
       private:
         using index_node_val_type_ = typename impl::index_value_type_helper<val_t>::type;
-        using index_storage_t_ = Pair<idx_t_, index_node_val_type_>;
-        using leaf_storage_t_ = Pair<idx_t_, val_t>;
+        using index_storage_t_ = Pair<idx_t, index_node_val_type_>;
+        using leaf_storage_t_ = Pair<idx_t, val_t>;
         using MutableHandle = PersistentMemory::MutableHandle;
         template <typename val_t_> using TrackedConfig = NaivePersistentMemory::tracker_t_<val_t_>;
         using stack_frame_t_ = std::pair<MutableHandle, size_t>;
@@ -81,7 +81,7 @@ namespace norb {
 #endif
             static constexpr size_t merge_threshold = node_capacity * .25f;
             static constexpr size_t split_threshold = node_capacity * .75f;
-            static_assert(PAGE_SIZE - aux_var_size > (sizeof(idx_t_) + sizeof(MutableHandle)));
+            static_assert(PAGE_SIZE - aux_var_size > (sizeof(idx_t) + sizeof(MutableHandle)));
             static_assert(node_capacity >= 4);
 
             size_t layer = 0;
@@ -120,7 +120,7 @@ namespace norb {
          * @param key The key to search for.
          * @return The index to the next node to search in.
          */
-        static size_t lower_bound(const IndexNode &node, const idx_t_ &key) {
+        static size_t lower_bound(const IndexNode &node, const idx_t &key) {
             size_t left = 0, right = node.size;
             while (left < right) {
                 const size_t mid = (left + right) / 2;
@@ -158,7 +158,7 @@ namespace norb {
          * @return The position of the appropriate pair, [important] maximum being
          * node.size.
          */
-        static size_t lower_bound(const LeafNode &node, const idx_t_ &key) {
+        static size_t lower_bound(const LeafNode &node, const idx_t &key) {
             size_t left = 0, right = node.size;
             while (left < right) {
                 const size_t mid = (left + right) / 2;
@@ -476,7 +476,7 @@ namespace norb {
          * @param key The key to match.
          * @param function The function to perform.
          */
-        void find_all_do(const idx_t_ &key, const std::function<void(const val_t &)> &function) const {
+        void find_all_do(const idx_t &key, const std::function<void(const val_t &)> &function) const {
             if (tree_height.val == 0)
                 return;
             MutableHandle handle = root_handle.val;
@@ -510,7 +510,7 @@ namespace norb {
          * @param key The key to match.
          * @return A vector containing all found entries.
          */
-        [[nodiscard]] vector<val_t> find_all(const idx_t_ &key) const {
+        [[nodiscard]] vector<val_t> find_all(const idx_t &key) const {
             vector<val_t> ret;
             const auto lambda = [&ret](const val_t &val) { ret.push_back(val); };
             find_all_do(key, lambda);
@@ -522,7 +522,7 @@ namespace norb {
          * @param key The key to register under.
          * @param val The value to register.
          */
-        void insert(const idx_t_ &key, const val_t &val) {
+        void insert(const idx_t &key, const val_t &val) {
             ++tree_size.val;
             if (tree_height.val == 0) {
                 // create the first node and insert the element
@@ -536,7 +536,8 @@ namespace norb {
             auto [handle, history] = stack_descend_to_leaf(index_for_descent);
             auto [leaf_node_handle, within_leaf_node_pos] = get_insertion_pos(handle, norb::make_pair(key, val));
             auto leaf_node_href = leaf_node_handle.template ref<LeafNode>();
-            array::insert_at(leaf_node_href->data, leaf_node_href->size, within_leaf_node_pos, norb::make_pair(key, val));
+            array::insert_at(leaf_node_href->data, leaf_node_href->size, within_leaf_node_pos,
+                             norb::make_pair(key, val));
             ++leaf_node_href->size;
             // if exceeds the upperbound, travel up
             int cur = history.size() - 1;
@@ -559,7 +560,7 @@ namespace norb {
          * @param val The value to match.
          * @return Whether the removal is successful.
          */
-        bool remove(const idx_t_ &key, const val_t &val) {
+        bool remove(const idx_t &key, const val_t &val) {
             if (tree_height.val == 0)
                 return false;
             auto index_for_descent = norb::make_pair(key, impl::get_hashed_value(val));
@@ -597,7 +598,7 @@ namespace norb {
         }
 
         // This function is used for debugging, and is not called in src.cpp
-        void traverse(const bool &do_check = false) const {
+        void traverse(const bool &do_check = false) const requires (Ostreamable<idx_t> and Ostreamable<val_t>){
             std::cout << "--- Traversing B+ Tree (" << this << ") ---" << std::endl;
             std::cout << "[Info] Size: " << tree_size.val << ", Height: " << tree_height.val << std::endl;
 

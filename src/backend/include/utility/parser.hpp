@@ -13,6 +13,7 @@
 #include "semantic_cast.hpp"
 #include "stlite/map.hpp"
 #include "stlite/vector.hpp"
+#include "utility/decorators.hpp"
 #include "utils.hpp"
 
 namespace ticket {
@@ -83,25 +84,53 @@ namespace ticket {
         }
     };
 
-    namespace detail_traits { // for internal use
+    namespace detail_traits {
+        // Primary template - left undefined. Instantiation means no specialization matched.
         template <typename T> struct function_traits_impl;
+
+        // Specialization for function pointers
         template <typename Ret, typename... Args> struct function_traits_impl<Ret (*)(Args...)> {
             using return_type = Ret;
             using arg_tuple_type = std::tuple<Args...>;
             static constexpr size_t arity = sizeof...(Args);
         };
+
+        // Specialization for std::function
         template <typename Ret, typename... Args> struct function_traits_impl<std::function<Ret(Args...)>> {
             using return_type = Ret;
             using arg_tuple_type = std::tuple<Args...>;
             static constexpr size_t arity = sizeof...(Args);
         };
-        template <typename T> struct function_traits_impl : function_traits_impl<decltype(&T::operator())> {};
+
+        // Specialization for norb::PrintResult (THIS IS KEY)
+        // It "unwraps" the decorator to get traits of the original function.
+        // This should be chosen by the compiler over the general class type rule below for PrintResult instances.
+        template <typename WrappedCallable>
+        struct function_traits_impl<norb::PrintResult<WrappedCallable>>
+            : function_traits_impl<std::decay_t<WrappedCallable>> {}; // Recurse on the wrapped type
+
+        // Specializations for member function pointers (operator() of functors/lambdas)
+        // These are what decltype(&T::operator()) would resolve to.
         template <typename ClassType, typename Ret, typename... Args>
         struct function_traits_impl<Ret (ClassType::*)(Args...) const> {
             using return_type = Ret;
             using arg_tuple_type = std::tuple<Args...>;
             static constexpr size_t arity = sizeof...(Args);
         };
+        template <typename ClassType, typename Ret, typename... Args>
+        struct function_traits_impl<Ret (ClassType::*)(Args...)> { // Non-const
+            using return_type = Ret;
+            using arg_tuple_type = std::tuple<Args...>;
+            static constexpr size_t arity = sizeof...(Args);
+        };
+
+        // General fallback for other class types (functors/lambdas)
+        // This will be used if T is a class and not PrintResult (due to PrintResult being more specific)
+        // and not one of the function pointer/std::function types.
+        template <typename T> struct function_traits_impl : function_traits_impl<decltype(&T::operator())> {};
+        // This rule is fine for lambdas. It would have been problematic for PrintResult
+        // if the PrintResult-specific specialization wasn't present or wasn't chosen.
+
     } // namespace detail_traits
     template <typename T> using function_traits = detail_traits::function_traits_impl<std::decay_t<T>>;
 

@@ -1,104 +1,133 @@
 // logging.hpp
 #pragma once
 
-#include <iostream>
-#include <fstream>
-#include <string>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <stdexcept>
-#include <utility>
+#include <string>
+#include <utility> // For std::move
 
-namespace norb
-{
-    class logger
-    {
-    private:
+namespace norb {
+    // Enum for log levels
+    enum class LogLevel { DEBUG, INFO, WARNING, ERROR };
+
+    // Helper function to convert LogLevel to string
+    inline std::string logLevelToString(LogLevel level) {
+        switch (level) {
+        case LogLevel::DEBUG:
+            return "DEBUG";
+        case LogLevel::INFO:
+            return "INFO";
+        case LogLevel::WARNING:
+            return "WARNING";
+        case LogLevel::ERROR:
+            return "ERROR";
+        default:
+            return "UNKNOWN";
+        }
+    }
+
+    class logger {
+      private:
         std::ofstream file_stream_;
+        LogLevel current_level_ = LogLevel::INFO;
+        bool prefix_pending_ = false;
+        inline static int current_line_number_ = 0;
 
-    public:
-        // Constructor: opens the log file
-        explicit logger(const std::filesystem::path& file_path)
-        {
-            file_stream_.open(file_path, std::ios::app);
-            if (!file_stream_.is_open())
-            {
-                std::string error_message = "Failed to open log file: ";
-                try
-                {
-                    error_message += file_path.string();
+        // Helper to print the prefix
+        void print_prefix_if_needed() {
+            if (prefix_pending_) {
+                std::string level_str = logLevelToString(current_level_);
+                std::string prefix_str = "[" + std::to_string(current_line_number_) + "] [" + level_str + "] ";
+
+                std::clog << prefix_str;
+                if (file_stream_.is_open() && file_stream_.good()) {
+                    file_stream_ << prefix_str;
                 }
-                catch (const std::exception& e)
-                {
+                prefix_pending_ = false;
+            }
+        }
+
+      public:
+        explicit logger(const std::filesystem::path &file_path) {
+            file_stream_.open(file_path, std::ios::app);
+            if (!file_stream_.is_open()) {
+                std::string error_message = "Failed to open log file: ";
+                try {
+                    error_message += file_path.string();
+                } catch (const std::exception &e) {
                     error_message += "[unrepresentable path]";
                 }
                 throw std::runtime_error(error_message);
             }
+            file_stream_ << "\n-- Started new logging session --\n";
         }
 
-        // Destructor: ensures the file stream is flushed and closed
-        ~logger()
-        {
-            if (file_stream_.is_open())
-            {
-                file_stream_.flush(); // Ensure all buffered output is written
+        ~logger() {
+            if (file_stream_.is_open()) {
+                file_stream_.flush();
                 file_stream_.close();
             }
         }
 
-        logger(const logger&) = delete;
-        logger& operator=(const logger&) = delete;
-
-        logger(logger&& other) noexcept
-            : file_stream_(std::move(other.file_stream_))
-        {
+        logger(const logger &) = delete;
+        logger &operator=(const logger &) = delete;
+        logger(logger &&other) noexcept
+            : file_stream_(std::move(other.file_stream_)), current_level_(other.current_level_),
+              prefix_pending_(other.prefix_pending_) {
         }
 
-        logger& operator=(logger&& other) noexcept
-        {
-            if (this != &other)
-            {
-                // Close our own stream if open, before taking over the other's
-                if (file_stream_.is_open())
-                {
+        logger &operator=(logger &&other) noexcept {
+            if (this != &other) {
+                if (file_stream_.is_open()) {
                     file_stream_.flush();
                     file_stream_.close();
                 }
                 file_stream_ = std::move(other.file_stream_);
-                // log_file_path_ = std::move(other.log_file_path_);
+                current_level_ = other.current_level_;
+                prefix_pending_ = other.prefix_pending_;
             }
             return *this;
         }
 
-        // Overload operator<< for general types
-        template <typename T>
-        logger& operator<<(const T& message)
-        {
+        static void set_line_number(int line_number) {
+            current_line_number_ = line_number;
+        }
+
+        logger &as(LogLevel level) {
+            current_level_ = level;
+            prefix_pending_ = true;
+            return *this;
+        }
+
+        template <typename T> logger &operator<<(const T &message) {
+            print_prefix_if_needed();
             std::clog << message; // Output to standard log (console)
-            if (file_stream_.is_open() && file_stream_.good())
-            {
+            if (file_stream_.is_open() && file_stream_.good()) {
                 file_stream_ << message; // Output to file
             }
             return *this;
         }
 
-        logger& operator<<(std::ostream& (*manip)(std::ostream&))
-        {
+        logger &operator<<(std::ostream &(*manip)(std::ostream &)) {
+            print_prefix_if_needed(); // Print prefix if this is the first part of a new log entry
             manip(std::clog);
-            if (file_stream_.is_open() && file_stream_.good())
-            {
+            if (file_stream_.is_open() && file_stream_.good()) {
                 manip(file_stream_);
             }
             return *this;
         }
 
-        logger& operator<<(std::ios_base& (*manip)(std::ios_base&))
-        {
+        logger &operator<<(std::ios_base &(*manip)(std::ios_base &)) {
+            print_prefix_if_needed();
             manip(std::clog);
-            if (file_stream_.is_open() && file_stream_.good())
-            {
+            if (file_stream_.is_open() && file_stream_.good()) {
                 manip(file_stream_);
             }
             return *this;
         }
     };
+
 } // namespace norb

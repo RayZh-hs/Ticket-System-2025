@@ -4,9 +4,11 @@
 #include <iostream>
 
 #include "logging.hpp"
-#include "settings.hpp"
 
 namespace ticket {
+
+    extern const char log_file_path[];
+
     struct TicketSystemStandardInterface
     {
         inline static auto &out = std::cout;

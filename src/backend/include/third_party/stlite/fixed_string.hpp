@@ -15,7 +15,7 @@ namespace norb
         FixedString() = default;
         FixedString(const FixedString&) = default;
 
-        explicit FixedString(const std::string& std_string)
+        FixedString(const std::string& std_string)
         {
             strcpy(str, std_string.c_str());
             str[max_len] = '\0';

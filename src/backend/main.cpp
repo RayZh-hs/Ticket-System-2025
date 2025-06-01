@@ -18,7 +18,7 @@ int main() {
     std::string line;
     while (std::getline(interface::in, line)) {
         const auto instruction = ticket::Parser::parse(line);
-        norb::logger::set_line_number(instruction.timestamp);
+        interface::set_timestamp(instruction.timestamp);
         cmdr.dispatch(instruction);
     }
 }

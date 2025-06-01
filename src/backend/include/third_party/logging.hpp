@@ -29,7 +29,7 @@ namespace norb {
         }
     }
 
-    class logger {
+    class Logger {
       private:
         std::ofstream file_stream_;
         LogLevel current_level_ = LogLevel::INFO;
@@ -51,7 +51,7 @@ namespace norb {
         }
 
       public:
-        explicit logger(const std::filesystem::path &file_path) {
+        explicit Logger(const std::filesystem::path &file_path) {
             file_stream_.open(file_path, std::ios::app);
             if (!file_stream_.is_open()) {
                 std::string error_message = "Failed to open log file: ";
@@ -65,21 +65,21 @@ namespace norb {
             file_stream_ << "\n-- Started new logging session --\n";
         }
 
-        ~logger() {
+        ~Logger() {
             if (file_stream_.is_open()) {
                 file_stream_.flush();
                 file_stream_.close();
             }
         }
 
-        logger(const logger &) = delete;
-        logger &operator=(const logger &) = delete;
-        logger(logger &&other) noexcept
+        Logger(const Logger &) = delete;
+        Logger &operator=(const Logger &) = delete;
+        Logger(Logger &&other) noexcept
             : file_stream_(std::move(other.file_stream_)), current_level_(other.current_level_),
               prefix_pending_(other.prefix_pending_) {
         }
 
-        logger &operator=(logger &&other) noexcept {
+        Logger &operator=(Logger &&other) noexcept {
             if (this != &other) {
                 if (file_stream_.is_open()) {
                     file_stream_.flush();
@@ -96,13 +96,13 @@ namespace norb {
             current_line_number_ = line_number;
         }
 
-        logger &as(LogLevel level) {
+        Logger &as(LogLevel level) {
             current_level_ = level;
             prefix_pending_ = true;
             return *this;
         }
 
-        template <typename T> logger &operator<<(const T &message) {
+        template <typename T> Logger &operator<<(const T &message) {
             print_prefix_if_needed();
             std::clog << message; // Output to standard log (console)
             if (file_stream_.is_open() && file_stream_.good()) {
@@ -111,7 +111,7 @@ namespace norb {
             return *this;
         }
 
-        logger &operator<<(std::ostream &(*manip)(std::ostream &)) {
+        Logger &operator<<(std::ostream &(*manip)(std::ostream &)) {
             print_prefix_if_needed(); // Print prefix if this is the first part of a new log entry
             manip(std::clog);
             if (file_stream_.is_open() && file_stream_.good()) {
@@ -120,12 +120,48 @@ namespace norb {
             return *this;
         }
 
-        logger &operator<<(std::ios_base &(*manip)(std::ios_base &)) {
+        Logger &operator<<(std::ios_base &(*manip)(std::ios_base &)) {
             print_prefix_if_needed();
             manip(std::clog);
             if (file_stream_.is_open() && file_stream_.good()) {
                 manip(file_stream_);
             }
+            return *this;
+        }
+    };
+
+    // Stub implementation for Logger
+    class NoLogger {
+      public:
+        explicit NoLogger(const std::filesystem::path &) {
+        }
+
+        ~NoLogger() = default;
+
+        NoLogger(const NoLogger &) = delete;
+        NoLogger &operator=(const NoLogger &) = delete;
+        NoLogger(NoLogger &&other) noexcept = default;
+
+        NoLogger &operator=(NoLogger &&other) noexcept {
+            return *this;
+        }
+
+        static void set_line_number(int line_number) {
+        }
+
+        NoLogger &as(LogLevel level) {
+            return *this;
+        }
+
+        template <typename T> NoLogger &operator<<(const T &) {
+            return *this;
+        }
+
+        NoLogger &operator<<(std::ostream &(*)(std::ostream &)) {
+            return *this;
+        }
+
+        NoLogger &operator<<(std::ios_base &(*)(std::ios_base &)) {
             return *this;
         }
     };

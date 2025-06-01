@@ -3,23 +3,29 @@
 
 #include <iostream>
 
-#include "logging.hpp"
+#include "utility/io.hpp"
 
 namespace ticket {
 
-    extern const char log_file_path[];
-
-    struct TicketSystemStandardInterface
-    {
-        inline static auto &out = std::cout;
+    struct TicketSystemStandardInterface {
+        inline static auto &out = timestamped_cout;
         inline static auto &in = std::cin;
-        inline static auto &log = std::clog;
+        inline static auto &log = no_logger;
+
+        static void set_timestamp(int timestamp) {
+            out.set_timestamp(timestamp);
+            norb::Logger::set_line_number(timestamp);
+        }
     };
 
-    struct TicketSystemDebugInterface
-    {
-        inline static auto &out = std::cout;
+    struct TicketSystemDebugInterface {
+        inline static auto &out = timestamped_cout;
         inline static auto &in = std::cin;
-        inline static auto log = norb::logger(log_file_path);
+        inline static auto &log = verbose_logger;
+
+        static void set_timestamp(int timestamp) {
+            out.set_timestamp(timestamp);
+            norb::Logger::set_line_number(timestamp);
+        }
     };
-}
+} // namespace ticket

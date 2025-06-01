@@ -105,8 +105,8 @@ namespace ticket {
         // Specialization for norb::PrintResult (THIS IS KEY)
         // It "unwraps" the decorator to get traits of the original function.
         // This should be chosen by the compiler over the general class type rule below for PrintResult instances.
-        template <typename WrappedCallable>
-        struct function_traits_impl<norb::PrintResult<WrappedCallable>>
+        template <typename WrappedCallable, typename OstreamLike>
+        struct function_traits_impl<norb::PrintResult<WrappedCallable, OstreamLike>>
             : function_traits_impl<std::decay_t<WrappedCallable>> {}; // Recurse on the wrapped type
 
         // Specializations for member function pointers (operator() of functors/lambdas)

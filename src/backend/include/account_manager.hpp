@@ -59,7 +59,7 @@ namespace ticket {
 
       private:
         using LogLevel = norb::LogLevel;
-        norb::BPlusTree<Account::id_t, Account> account_store;
+        norb::BPlusTree<Account::id_t, Account, norb::MANUAL> account_store;
         norb::set<Account::id_t> login_store;
 
       public:

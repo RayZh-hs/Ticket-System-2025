@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <functional>
 #include <initializer_list>
 #include <optional>
@@ -10,11 +11,12 @@
 #include <type_traits>
 #include <utility>
 
-#include "semantic_cast.hpp"
 #include "stlite/map.hpp"
 #include "stlite/vector.hpp"
 #include "utility/decorators.hpp"
+#include "semantic_cast.hpp"
 #include "utils.hpp"
+#include "ntraits.hpp"
 
 namespace ticket {
 
@@ -111,15 +113,10 @@ namespace ticket {
             static constexpr size_t arity = sizeof...(Args);
         };
 
-        // Specialization for norb::PrintResult (THIS IS KEY)
-        // It "unwraps" the decorator to get traits of the original function.
-        // This should be chosen by the compiler over the general class type rule below for PrintResult instances.
         template <typename WrappedCallable, typename OstreamLike>
         struct function_traits_impl<norb::PrintResult<WrappedCallable, OstreamLike>>
             : function_traits_impl<std::decay_t<WrappedCallable>> {}; // Recurse on the wrapped type
 
-        // Specializations for member function pointers (operator() of functors/lambdas)
-        // These are what decltype(&T::operator()) would resolve to.
         template <typename ClassType, typename Ret, typename... Args>
         struct function_traits_impl<Ret (ClassType::*)(Args...) const> {
             using return_type = Ret;
@@ -137,9 +134,6 @@ namespace ticket {
         // This will be used if T is a class and not PrintResult (due to PrintResult being more specific)
         // and not one of the function pointer/std::function types.
         template <typename T> struct function_traits_impl : function_traits_impl<decltype(&T::operator())> {};
-        // This rule is fine for lambdas. It would have been problematic for PrintResult
-        // if the PrintResult-specific specialization wasn't present or wasn't chosen.
-
     } // namespace detail_traits
     template <typename T> using function_traits = detail_traits::function_traits_impl<std::decay_t<T>>;
 
@@ -151,35 +145,22 @@ namespace ticket {
         struct ParamInfo {
             char key;
             bool is_flag;
-            std::optional<std::string> default_value_str;
+            std::any default_value; // Can store a default value of any type
 
             // Constructor for: {'k'} (required, no default)
-            ParamInfo(char k) : key(k), is_flag(false), default_value_str(std::nullopt) {
-            }
+            ParamInfo(char k) : key(k), is_flag(false), default_value() {
+            } // default_value is empty
 
             // Constructor for: {'k', flag}
-            ParamInfo(char k, FlagIndicator) : key(k), is_flag(true), default_value_str(std::nullopt) {
+            ParamInfo(char k, FlagIndicator) : key(k), is_flag(true), default_value() {
             }
 
-            // Constructor for: {'k', "default_string"}
-            ParamInfo(char k, const char *default_val)
-                : key(k), is_flag(false), default_value_str(std::string(default_val)) {
+            // Constructor for: {'k', default_typed_value}
+            // e.g., {'p', 1}, {'s', "hello"}, {'o', MyCustomType{}}, {'x', std::nullopt}
+            template <typename T> ParamInfo(char k, T &&val) : key(k), is_flag(false) {
+                // If T is FlagIndicator, it should have been caught by the (char, FlagIndicator) constructor.
+                default_value = std::make_any<std::decay_t<T>>(std::forward<T>(val));
             }
-
-            ParamInfo(char k, const std::string &default_val) : key(k), is_flag(false), default_value_str(default_val) {
-            }
-
-            // Constructor for: {'k', int_default_val} e.g. {'p', 1}
-            ParamInfo(char k, int default_val)
-                : key(k), is_flag(false), default_value_str(std::to_string(default_val)) {
-            }
-
-            // Constructor for: {'k', bool_default_val} e.g. {'b', true}
-            ParamInfo(char k, bool default_val)
-                : key(k), is_flag(false), default_value_str(default_val ? "true" : "false") {
-            }
-
-            // Add more overloads for other default types if needed (double, etc.)
         };
 
       private:
@@ -190,18 +171,21 @@ namespace ticket {
                                                              const ParamInfo &param_info) const {
             using DecayedTargetType = std::decay_t<TargetTypeOriginal>;
             bool key_found = false;
-            std::string kwarg_val_str; // Value from instruction's kwargs if key is found
+            std::string kwarg_val_str; // String value from instruction's kwargs if key is found
 
+            // 1. Check if the key is present in the parsed instruction's arguments
             for (const auto &kwarg : inst.kwargs) {
                 if (kwarg.first == param_info.key) {
                     key_found = true;
-                    kwarg_val_str = kwarg.second;
+                    kwarg_val_str = kwarg.second; // kwarg.second is std::string
                     break;
                 }
             }
 
+            // 2. If key was found in the instruction:
             if (key_found) {
                 if (param_info.is_flag) {
+                    // If the parameter is a flag and the key was found, it means the flag is present.
                     if constexpr (std::is_same_v<DecayedTargetType, bool>)
                         return true;
                     if constexpr (std::is_same_v<DecayedTargetType, int>)
@@ -210,25 +194,79 @@ namespace ticket {
                 return norb::semantic_cast<DecayedTargetType>(kwarg_val_str);
             }
 
-            // Key not found
+            // 3. Key was NOT found in the instruction. Handle defaults or missing required args.
             if (param_info.is_flag) {
                 if constexpr (std::is_same_v<DecayedTargetType, bool>)
                     return false;
                 if constexpr (std::is_same_v<DecayedTargetType, int>)
                     return 0;
-                // A flag for a non-bool/int type that is missing
-                throw command_registry_error(
-                    "Missing flag -" + std::string(1, param_info.key) +
-                    " cannot be defaulted for non-bool/int type without explicit default_value_str.");
+                throw std::logic_error("Error for flag -" + std::string(1, param_info.key) +
+                                       ": Missing flag cannot be meaningfully defaulted for target type " +
+                                       typeid(DecayedTargetType).name() + " without an explicit default value.");
             }
 
-            if (param_info.default_value_str) {
-                return norb::semantic_cast<DecayedTargetType>(*param_info.default_value_str);
-            }
+            if (param_info.default_value.has_value()) {
+                const std::any &default_val_any = param_info.default_value;
 
-            throw command_registry_error("Missing required argument: -" + std::string(1, param_info.key));
+                // Try to cast the std::any to the DecayedTargetType directly.
+                if (const DecayedTargetType *ptr = std::any_cast<DecayedTargetType>(&default_val_any)) {
+                    return *ptr;
+                }
+
+                // Specific handling if the target is std::optional and the default was std::nullopt
+                if constexpr (norb::is_optional_v<DecayedTargetType>) {
+                    if (std::any_cast<std::nullopt_t>(&default_val_any)) {
+                        return std::nullopt; // DecayedTargetType is std::optional<Something>
+                    }
+                }
+
+                // If the std::any holds a string (e.g., from ParamInfo('k', "123") or ParamInfo('k', 123)),
+                // try to semantic_cast this string to the target type.
+                if (const std::string *str_ptr = std::any_cast<std::string>(&default_val_any)) {
+                    return norb::semantic_cast<DecayedTargetType>(*str_ptr);
+                }
+                if (const char *const *cstr_ptr_ptr = std::any_cast<const char *>(&default_val_any)) {
+                    if (*cstr_ptr_ptr) {
+                        return norb::semantic_cast<DecayedTargetType>(std::string(*cstr_ptr_ptr));
+                    }
+                }
+
+                // Add more specific conversions from types stored in std::any if necessary.
+                if constexpr (std::is_integral_v<DecayedTargetType> || std::is_floating_point_v<DecayedTargetType>) {
+                    if (const int *int_ptr = std::any_cast<int>(&default_val_any)) {
+                        if constexpr (std::is_convertible_v<int, DecayedTargetType>) {
+                            return static_cast<DecayedTargetType>(*int_ptr);
+                        }
+                    }
+                    if (const double *double_ptr = std::any_cast<double>(&default_val_any)) {
+                        if constexpr (std::is_convertible_v<double, DecayedTargetType>) {
+                            return static_cast<DecayedTargetType>(*double_ptr);
+                        }
+                    }
+                    // Add for bool if stored directly as bool in std::any
+                    if (const bool *bool_ptr = std::any_cast<bool>(&default_val_any)) {
+                        if constexpr (std::is_convertible_v<bool, DecayedTargetType>) {
+                            return static_cast<DecayedTargetType>(*bool_ptr);
+                        }
+                    }
+                }
+                throw std::runtime_error("Type mismatch for default value of key -" + std::string(1, param_info.key) +
+                                         ". Stored default type in std::any ('" + default_val_any.type().name() +
+                                         "') is not directly usable or convertible to target type '" +
+                                         typeid(DecayedTargetType).name() + "'.");
+
+            } else {
+                // If the target type is std::optional, and no key was found, and no default_value was specified,
+                // it should become std::nullopt.
+                if constexpr (norb::is_optional_v<DecayedTargetType>) {
+                    return std::nullopt;
+                } else {
+                    // Not a flag, key not found, not optional, and no default value -> missing required argument.
+                    throw std::runtime_error("Missing required argument: -" + std::string(1, param_info.key) +
+                                             " (and no default value was specified).");
+                }
+            }
         }
-
         template <typename OriginalArgsTuple, size_t... Is>
         auto build_decayed_tuple_from_params(const Instruction &inst, const std::vector<ParamInfo> &param_infos,
                                              std::index_sequence<Is...>) const {

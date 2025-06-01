@@ -7,8 +7,7 @@
 
 namespace norb {
     // Primary template: attempts to construct T from std::string
-    // This will be used if no explicit specialization matches.
-    template <typename to_t, typename from_t> to_t semantic_cast(const from_t &s) {
+    template <typename to_t, typename from_t> requires (not norb::is_optional_v<to_t> and not std::is_integral_v<to_t>) to_t semantic_cast(const from_t &s) {
         try {
             return to_t(s);
         } catch (const std::exception &e) {
@@ -50,11 +49,12 @@ namespace norb {
                                  "'. Expected true/false/1/0 or empty for false.");
     }
 
-    // Specialization for std::string is crucial because T(const std::string&) for T=std::string is just the copy
-    // constructor. The primary template would work, but an explicit one is clearer.
     template <> inline std::string semantic_cast<std::string>(const std::string &s) {
         return s;
     }
 
-    // Add other specializations as needed (e.g., double, long, custom classes not constructible from string)
+    template <typename to_t> requires norb::is_optional_v<to_t> to_t semantic_cast(const std::string &s) {
+        using base_t = typename to_t::value_type;
+        return std::make_optional(semantic_cast<base_t>(s));
+    }
 } // namespace norb

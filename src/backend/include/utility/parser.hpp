@@ -157,9 +157,9 @@ namespace ticket {
 
             // Constructor for: {'k', default_typed_value}
             // e.g., {'p', 1}, {'s', "hello"}, {'o', MyCustomType{}}, {'x', std::nullopt}
-            template <typename T> ParamInfo(char k, T &&val) : key(k), is_flag(false) {
+            template <typename T> ParamInfo(char k, T &&default_value) : key(k), is_flag(false) {
                 // If T is FlagIndicator, it should have been caught by the (char, FlagIndicator) constructor.
-                default_value = std::make_any<std::decay_t<T>>(std::forward<T>(val));
+                this->default_value = std::make_any<std::decay_t<T>>(std::forward<T>(default_value));
             }
         };
 

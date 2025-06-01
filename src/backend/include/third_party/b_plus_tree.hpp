@@ -8,6 +8,7 @@
 #include <functional>
 #include <iostream>
 #include <queue> // only used in debug
+#include <stlite/range.hpp>
 #include <string>
 #include <type_traits>
 
@@ -497,6 +498,41 @@ namespace norb {
             vector<val_t> ret;
             const auto lambda = [&ret](const val_t &val) { ret.push_back(val); };
             find_all_do(key, lambda);
+            return ret;
+        }
+
+        void find_all_in_range_do(Range<idx_t> range, const std::function<void(const val_t &)> &function) const {
+            if (tree_height.val == 0 || range.is_empty())
+                return;
+            MutableHandle handle = root_handle.val;
+            for (int i = 0; i < tree_height.val - 1; i++) {
+                const auto &index_node_ref = *handle.const_ref<IndexNode>();
+                const auto next_node_idx = lower_bound(index_node_ref, range.get_from());
+                handle = index_node_ref.children[next_node_idx];
+                assert(!handle.is_nullptr());
+            }
+            const LeafNode *leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            size_t cur = lower_bound(*leaf_node_ref, range.get_from());
+            while (true) {
+                for (; cur < leaf_node_ref->size; ++cur) {
+                    const auto key_data = leaf_node_ref->data[cur].first;
+                    if (not range.contains_from_right(key_data))
+                        return;
+                    if (range.contains_from_left(key_data))
+                        function(leaf_node_ref->data[cur].second);
+                }
+                cur = 0;
+                handle = leaf_node_ref->sibling;
+                if (handle.is_nullptr())
+                    return;
+                leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            }
+        }
+
+        [[nodiscard]] vector<val_t> find_all_in_range(const Range<idx_t> &key) const {
+            vector<val_t> ret;
+            const auto lambda = [&ret](const val_t &val) { ret.push_back(val); };
+            find_all_in_range_do(key, lambda);
             return ret;
         }
 

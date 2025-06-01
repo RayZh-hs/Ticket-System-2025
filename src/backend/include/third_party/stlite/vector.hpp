@@ -56,7 +56,8 @@ namespace norb {
     void duplicate_vector(const vector<T> &other) {
       base_ptr = raw_new(other.cur_size_bound);
       for (size_t i = 0; i < other.cur_size; i++) {
-        base_ptr[i] = T(other.base_ptr[i]);
+        // base_ptr[i] = T(other.base_ptr[i]);
+        new (base_ptr + i) T(other.base_ptr[i]);
       }
       cur_size = other.cur_size;
       cur_size_bound = other.cur_size_bound;

@@ -1,11 +1,11 @@
-#include "ticket_manager.hpp"
+#include "ticket_system.hpp"
 #include "utility/decorators.hpp"
 #include "utility/parser.hpp"
 
 // Using common
 using interface = ticket::global_interface;
 using ticket::CommandRegistry;
-using ticket::TicketManager;
+using ticket::TicketSystem;
 // Using decorators:
 using norb::$print;
 
@@ -24,7 +24,7 @@ int main() {
 }
 
 void register_commands(CommandRegistry &cmdr) {
-    cmdr.register_command("add_user", $print(TicketManager::add_user),
+    cmdr.register_command("add_user", $print(TicketSystem::add_user),
                           {
                               {'c', ""}, // current_user, "" for first call
                               {'u'},     // username
@@ -33,5 +33,4 @@ void register_commands(CommandRegistry &cmdr) {
                               {'m'},     // mail address
                               {'g', ""}  // privilege
                           });
-    // cmdr.register_command("test", TicketManager::test, {});
 }

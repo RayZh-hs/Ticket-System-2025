@@ -33,7 +33,7 @@ namespace ticket {
             return global_hash_method::hash(username);
         }
 
-        auto operator <=> (const Account &other) const {
+        auto operator<=>(const Account &other) const {
             return id() <=> other.id();
         }
     };
@@ -43,6 +43,7 @@ namespace ticket {
         using account_id_t = Account::id_t;
 
       private:
+        using LogLevel = norb::LogLevel;
         norb::BPlusTree<Account::id_t, Account> account_store;
         norb::map<Account::id_t, Account> login_store;
 
@@ -80,13 +81,20 @@ namespace ticket {
         void add_user(const Account &account) {
             const auto account_id = account.id();
             if (is_registered(account_id)) {
-                global_interface::log << "Error while adding user: User #" + account_id << " already exists!\n";
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Error while adding user: User #" + account_id << " already exists!";
                 throw std::runtime_error("Existing user");
             }
             // register the new account
             account_store.insert(account_id, account);
         }
 
-        // void
+        void login(const account_id_t &account_id) {
+            if (is_active(account_id)) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Error: User #" << account_id << " has already been logged in\n";
+                throw std::runtime_error("Attempting to login active user");
+            }
+        }
     };
 } // namespace ticket

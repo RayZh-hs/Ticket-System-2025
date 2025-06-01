@@ -3,12 +3,12 @@
 #include "utility/parser.hpp"
 
 using interface = ticket::global_interface;
+using norb::$print;
 using norb::LogLevel;
 using ticket::command_registry_error;
 using ticket::CommandRegistry;
 using ticket::parser_error;
 using ticket::TicketSystem;
-using norb::$print;
 
 void register_commands(CommandRegistry &);
 
@@ -63,5 +63,14 @@ void register_commands(CommandRegistry &cmdr) {
                           {
                               {'c'}, // current user
                               {'u'}  // username
+                          });
+    cmdr.register_command("modify_profile", $print(TicketSystem::modify_profile),
+                          {
+                              {'c'},               // current user
+                              {'u'},               // username
+                              {'p', std::nullopt}, // password
+                              {'n', std::nullopt}, // name
+                              {'m', std::nullopt}, // mail address
+                              {'g', std::nullopt}  // privilege
                           });
 }

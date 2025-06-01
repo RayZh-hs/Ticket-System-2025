@@ -597,6 +597,14 @@ namespace norb {
             return true;
         }
 
+        int remove_all(const idx_t &key) {
+            const auto vals = find_all(key);
+            for (const auto &val: vals) {
+                remove(key, val);
+            }
+            return vals.size();
+        }
+
         // This function is used for debugging, and is not called in src.cpp
         void traverse(const bool &do_check = false) const requires (Ostreamable<idx_t> and Ostreamable<val_t>){
             std::cout << "--- Traversing B+ Tree (" << this << ") ---" << std::endl;

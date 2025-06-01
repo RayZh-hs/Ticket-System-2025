@@ -28,13 +28,16 @@ namespace ticket {
         [[nodiscard]] id_t id() const {
             return global_hash_method::hash(static_cast<std::string>(username));
         }
-
         static auto id_from_username(const std::string &username) {
             return global_hash_method::hash(username);
         }
 
         static auto hash_password(const std::string &password) {
             return global_hash_method::hash(password);
+        }
+
+        bool operator!=(const Account &other) const {
+            return id() != other.id();
         }
 
         auto operator<=>(const Account &other) const {
@@ -124,6 +127,11 @@ namespace ticket {
                 global_interface::log.as(LogLevel::WARNING) << "Error: User #" << account_id << " has not logged in\n";
                 throw std::runtime_error("Attempting to logout non-active user");
             }
+        }
+
+        void change_account_info(const account_id_t &account_id, const Account &account) {
+            account_store.remove_all(account_id);
+            account_store.insert(account_id, account);
         }
     };
 } // namespace ticket

@@ -113,7 +113,7 @@ namespace ticket {
             }
             const auto current_user_privilege = current_user_info->privilege;
             const auto user_privilege = account_info->privilege;
-            if (user_privilege >= current_user_privilege) {
+            if (user_privilege >= current_user_privilege and not current_user_id == account_id) {
                 global_interface::log.as(LogLevel::WARNING)
                     << "QueryProfile failed because privilege underflow: " << current_user_privilege
                     << " <=" << user_privilege << '\n';
@@ -122,6 +122,51 @@ namespace ticket {
             return account_info.value();
         }
 
-        // static std::variant<int, Account> modify_profile(const std::string &current_username, const std::string &username, )
+        static std::variant<int, Account>
+        modify_profile(const std::string &current_username, const std::string &username,
+                       const std::optional<std::string> &password, const std::optional<std::string> &name,
+                       const std::optional<std::string> &mail_addr, const std::optional<int> &privilege) {
+            auto &account_manager = get_instance().account_manager_;
+            const auto current_user_id = Account::id_from_username(current_username);
+            const auto current_account_info = account_manager.find_active_user(current_user_id);
+            if (not current_account_info.has_value()) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "ModifyProfile failed because current user " << current_username << " has not logged in" << '\n';
+                return -1;
+            }
+            const auto account_id = Account::id_from_username(username);
+            auto account_info = account_manager.find_user(account_id);
+            if (not account_info.has_value()) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "ModifyProfile failed because " << username << " is not registered" << '\n';
+                return -1;
+            }
+            if (not(current_user_id == account_id or current_account_info->privilege >= account_info->privilege)) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "ModifyProfile failed because " << current_username << " is not authorized" << '\n';
+                return -1;
+            }
+            if (privilege.has_value() and current_account_info->privilege <= privilege) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "ModifyProfile failed because the intended privilege is beyond the current user's" << '\n';
+                return -1;
+            }
+            // Change the user's account info
+            if (password.has_value()) {
+                account_info->hashed_password = Account::hash_password(password.value());
+            }
+            if (name.has_value()) {
+                account_info->name = name.value();
+            }
+            if (mail_addr.has_value()) {
+                account_info->mail_addr = mail_addr.value();
+            }
+            if (privilege.has_value()) {
+                account_info->privilege = privilege.value();
+            }
+            // Update the account info in the stores
+            account_manager.change_account_info(account_id, account_info.value());
+            return account_info.value();
+        }
     };
 } // namespace ticket

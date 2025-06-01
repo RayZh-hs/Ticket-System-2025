@@ -2,7 +2,8 @@
 
 #include <concepts>
 #include <iomanip>
-#include <iostream>
+#include <variant>
+#include <ostream>
 #include <type_traits>
 
 namespace norb {
@@ -106,4 +107,9 @@ namespace norb {
             };
         };
     };
+
+    template <typename T> struct is_variant : std::false_type {};
+
+    template <typename... Types> struct is_variant<std::variant<Types...>> : std::true_type {};
+
 }  // namespace norb

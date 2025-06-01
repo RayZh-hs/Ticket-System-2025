@@ -18,6 +18,15 @@
 
 namespace ticket {
 
+    struct parser_error final : std::logic_error {
+        parser_error(const std::string &msg) : std::logic_error(msg) {
+        }
+    };
+    struct command_registry_error final : std::logic_error {
+        command_registry_error(const std::string &msg) : std::logic_error(msg) {
+        }
+    };
+
     struct Instruction {
         using timestamp_t = int;
         using command_t = std::string;
@@ -37,24 +46,24 @@ namespace ticket {
             const std::string s = norb::string::trim(str_in);
 
             if (s.empty()) { // Check again after all trimming
-                throw std::runtime_error("Parser::parse error: Input string is empty after trimming.");
+                throw parser_error("Parser::parse error: Input string is empty after trimming.");
             }
 
             std::istringstream iss(s);
             std::string token;
 
             if (!(iss >> token))
-                throw std::runtime_error("Parser::parse error: Missing timestamp.");
+                throw parser_error("Parser::parse error: Missing timestamp.");
             try {
                 // token is formed as [INTEGER]
                 assert(token.size() >= 3);
                 inst.timestamp = std::stoi(token.substr(1, token.size() - 2));
             } catch (const std::exception &e) {
-                throw std::runtime_error("Parser::parse error: Invalid timestamp '" + token + "'. " + e.what());
+                throw parser_error("Parser::parse error: Invalid timestamp '" + token + "'. " + e.what());
             }
 
             if (!(iss >> inst.command) || inst.command.empty()) {
-                throw std::runtime_error("Parser::parse error: Missing or empty command name after timestamp.");
+                throw parser_error("Parser::parse error: Missing or empty command name after timestamp.");
             }
 
             while (iss >> token) {
@@ -76,8 +85,8 @@ namespace ticket {
                     }
                     inst.kwargs.emplace_back(key_char, value_arg);
                 } else {
-                    throw std::runtime_error("Parser::parse error: Unexpected token '" + token +
-                                             "' in arguments. Expected a key (e.g., -k).");
+                    throw parser_error("Parser::parse error: Unexpected token '" + token +
+                                       "' in arguments. Expected a key (e.g., -k).");
                 }
             }
             return inst;
@@ -208,7 +217,7 @@ namespace ticket {
                 if constexpr (std::is_same_v<DecayedTargetType, int>)
                     return 0;
                 // A flag for a non-bool/int type that is missing
-                throw std::logic_error(
+                throw command_registry_error(
                     "Missing flag -" + std::string(1, param_info.key) +
                     " cannot be defaulted for non-bool/int type without explicit default_value_str.");
             }
@@ -217,7 +226,7 @@ namespace ticket {
                 return norb::semantic_cast<DecayedTargetType>(*param_info.default_value_str);
             }
 
-            throw std::runtime_error("Missing required argument: -" + std::string(1, param_info.key));
+            throw command_registry_error("Missing required argument: -" + std::string(1, param_info.key));
         }
 
         template <typename OriginalArgsTuple, size_t... Is>
@@ -236,9 +245,9 @@ namespace ticket {
             std::vector<ParamInfo> param_infos_vec(param_infos_list.begin(), param_infos_list.end());
 
             if (param_infos_vec.size() != Traits::arity) {
-                throw std::logic_error("Cmd '" + command_name + "': ParamInfo count " +
-                                       std::to_string(param_infos_vec.size()) + " != function arity " +
-                                       std::to_string(Traits::arity));
+                throw command_registry_error("Cmd '" + command_name + "': ParamInfo count " +
+                                             std::to_string(param_infos_vec.size()) + " != function arity " +
+                                             std::to_string(Traits::arity));
             }
 
             handlers_[command_name] = [this, target_function, param_infos_vec, command_name](const Instruction &inst) {
@@ -252,7 +261,7 @@ namespace ticket {
             if (it != handlers_.cend()) {
                 it->second(inst);
             } else {
-                throw std::runtime_error("Unknown command: " + inst.command);
+                throw command_registry_error("Unknown command: " + inst.command);
             }
         }
     };

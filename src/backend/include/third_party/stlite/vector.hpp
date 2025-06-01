@@ -536,22 +536,31 @@ namespace norb {
       }
       base_ptr[--cur_size].~T();
     }
-
-    friend std::ostream &operator<< <>(std::ostream &os, const vector<T> &vec);
+    friend std::ostream &operator<< (std::ostream &os, const vector<T> &vec) requires Ostreamable<T> {
+      os << "[";
+      for (size_t i = 0; i < vec.cur_size; ++i) {
+        os << vec.base_ptr[i];
+        if (i < vec.cur_size - 1) {
+          os << ", ";
+        }
+      }
+      os << "]";
+      return os;
+    }
   };
 
-  template <typename T> requires Ostreamable<T>
-  std::ostream &operator<<(std::ostream &os, const vector<T> &vec) {
-    os << "[";
-    for (size_t i = 0; i < vec.cur_size; ++i) {
-      os << vec.base_ptr[i];
-      if (i < vec.cur_size - 1) {
-        os << ", ";
-      }
-    }
-    os << "]";
-    return os;
-  }
+  // template <typename T> requires Ostreamable<T>
+  // std::ostream &operator<<(std::ostream &os, const vector<T> &vec) {
+  //   os << "[";
+  //   for (size_t i = 0; i < vec.cur_size; ++i) {
+  //     os << vec.base_ptr[i];
+  //     if (i < vec.cur_size - 1) {
+  //       os << ", ";
+  //     }
+  //   }
+  //   os << "]";
+  //   return os;
+  // }
 
 } // namespace norb
 

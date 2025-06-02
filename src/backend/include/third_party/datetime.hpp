@@ -28,7 +28,7 @@ namespace norb {
         struct Date {
             int month, day;
 
-            explicit Date(int m = 0, int d = 0) : month(m), day(d) {
+            constexpr explicit Date(int m = 0, int d = 0) : month(m), day(d) {
             }
 
             explicit Date(const std::string &repr) {
@@ -44,12 +44,20 @@ namespace norb {
             explicit operator Datetime() const {
                 return Datetime::from_date(month, day);
             }
+
+            static constexpr Date max() {
+                return Date{12, 31};
+            }
+
+            static constexpr Date min() {
+                return Date{1, 1};
+            }
         };
 
         struct Time {
             int hour, minute;
 
-            explicit Time(int h = 0, int m = 0) : hour(h), minute(m) {
+            constexpr explicit Time(int h = 0, int m = 0) : hour(h), minute(m) {
             }
 
             explicit Time(const std::string &repr) {
@@ -64,30 +72,38 @@ namespace norb {
             explicit operator Datetime() const {
                 return Datetime::from_time(hour, minute);
             }
+
+            static constexpr Time max() {
+                return Time{23, 59};
+            }
+
+            static constexpr Time min() {
+                return Time{0, 0};
+            }
         };
 
         Date date;
         Time time;
 
-        Datetime(int m, int d, int h, int mn) : date(m, d), time(h, mn) {
+        constexpr Datetime(int m, int d, int h, int mn) : date(m, d), time(h, mn) {
         }
-        Datetime(const Date &d_val, const Time &t_val) : date(d_val), time(t_val) {
+        constexpr Datetime(const Date &d_val, const Time &t_val) : date(d_val), time(t_val) {
         }
 
-        Datetime() : date(0, 0), time(0, 0) {
+        constexpr Datetime() : date(0, 0), time(0, 0) {
         }
 
         explicit Datetime(const std::string &repr) : date(repr.substr(0, 5)), time(repr.substr(6, 5)) {
             assert(repr.size() == 11 && repr[5] == ' ');
         }
 
-        static Datetime from_date(int m, int d) {
+        constexpr static Datetime from_date(int m, int d) {
             return {m, d, 0, 0};
         }
-        static Datetime from_time(int h, int mn) {
+        constexpr static Datetime from_time(int h, int mn) {
             return {0, 0, h, mn};
         }
-        static Datetime from_datetime(int m, int d, int h, int mn) {
+        constexpr static Datetime from_datetime(int m, int d, int h, int mn) {
             return {m, d, h, mn};
         }
 
@@ -176,11 +192,11 @@ namespace norb {
             return static_cast<std::string>(date) + " " + static_cast<std::string>(time);
         }
 
-        static Datetime max() {
+        static constexpr Datetime max() {
             return from_datetime(12, 31, 23, 59);
         }
 
-        static Datetime min() {
+        static constexpr Datetime min() {
             return from_datetime(1, 1, 0, 0);
         }
     };

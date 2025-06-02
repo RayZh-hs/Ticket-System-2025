@@ -110,5 +110,13 @@ namespace ticket {
                 train_status_store.insert(train_id, {train_id, segment_pointer});
             }
         }
+
+        void remove_train_group(const train_group_id_t &train_group_id) {
+            train_status_store.remove_all_in_range(norb::unpack_range(
+                train_group_id,
+                norb::Range<Date>::full_range()
+            ));
+            interface::log.as(LogLevel::DEBUG) << "From ticket_manager: Removed train group with ID: " << train_group_id << "\n";
+        }
     };
 } // namespace ticket

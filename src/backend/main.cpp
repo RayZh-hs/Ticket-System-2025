@@ -86,4 +86,12 @@ void register_commands(CommandRegistry &cmdr) {
                               {'d'}, // sale date
                               {'y'}  // type
                           });
+    cmdr.register_command("delete_train", $print(TicketSystem::delete_train),
+                          {
+                              {'i'}, // train group name (aka. trainID)
+                          });
+    cmdr.register_command("release_train", $print(TicketSystem::release_train),
+                          {
+                              {'i'}, // train group name (aka. trainID)
+                          });
 }

@@ -236,5 +236,37 @@ namespace ticket {
                 return -1;
             }
         }
+    
+        static int delete_train(const std::string &train_group_name) {
+            auto &train_manager = get_instance().train_manager_;
+            auto &ticket_manager = get_instance().ticket_manager_;
+            
+            try {
+                const auto train_group_id = TrainManager::train_group_id_from_name(train_group_name);
+                global_interface::log.as(LogLevel::DEBUG)
+                    << "Deleting train group " << train_group_name << " with ID #" << train_group_id << '\n';
+                train_manager.delete_train_group(train_group_id);
+                ticket_manager.remove_train_group(train_group_id);
+                return 0;
+            } catch (std::runtime_error &e) {
+                global_interface::log.as(LogLevel::WARNING) << "Delete train failed: " << e.what() << '\n';
+                return -1;
+            }
+        }
+
+        static int release_train(const std::string &train_group_name) {
+            auto &train_manager = get_instance().train_manager_;
+
+            try {
+                const auto train_group_id = TrainManager::train_group_id_from_name(train_group_name);
+                global_interface::log.as(LogLevel::DEBUG)
+                    << "Releasing train group " << train_group_name << " with ID #" << train_group_id << '\n';
+                train_manager.release_train_group(train_group_id);
+                return 0;
+            } catch (std::runtime_error &e) {
+                global_interface::log.as(LogLevel::WARNING) << "Release train failed: " << e.what() << '\n';
+                return -1;
+            }
+        }
     };
 } // namespace ticket

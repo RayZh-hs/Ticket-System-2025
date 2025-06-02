@@ -111,23 +111,24 @@ namespace ticket {
             if (not train_group_store.count(train_group_id)) {
                 throw std::runtime_error("Train group does not exist.");
             }
-            if (train_group_release_store.find_first(train_group_id)) {
+            if (train_group_release_store.find_first(train_group_id).value()) {
                 throw std::runtime_error("Train group is already released.");
             }
+            train_group_release_store.remove(train_group_id, false);
             train_group_release_store.insert(train_group_id, true);
         }
 
-        void delete_train(const train_group_id_t &train_group_id) {
+        void delete_train_group(const train_group_id_t &train_group_id) {
             if (not train_group_store.count(train_group_id)) {
                 throw std::runtime_error("Train group does not exist.");
             }
-            if (train_group_release_store.find_first(train_group_id)) {
+            if (train_group_release_store.find_first(train_group_id).value()) {
                 throw std::runtime_error("Train group is released and cannot be deleted.");
             }
             // remove in train_group_store and train_group_release_store
             // there is no need to remove segments from train_group_segments since it is a dynamic segment list
-            train_group_store.remove_all(train_group_id);
-            train_group_release_store.remove(train_group_id, false);
+            assert(train_group_store.remove_all(train_group_id));
+            assert(train_group_release_store.remove(train_group_id, false));
         }
     };
 } // namespace ticket

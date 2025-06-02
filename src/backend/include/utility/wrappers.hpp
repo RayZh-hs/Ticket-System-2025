@@ -8,12 +8,15 @@ namespace ticket {
 
     using norb::semantic_cast;
 
-    template <typename val_t, const char delimiter = '|'> struct ConcentratedString {
+    inline constexpr const char default_placeholder[] = "_";
+    template <typename val_t, const char *placeholder = default_placeholder, const char delimiter = '|'>
+    struct ConcentratedString {
       private:
         norb::vector<val_t> decoded;
 
       public:
         ConcentratedString(const std::string &s) {
+            if (s == placeholder) return;
             std::string mem;
             for (int i = 0; i < s.length(); i++) {
                 if (s[i] == delimiter) {

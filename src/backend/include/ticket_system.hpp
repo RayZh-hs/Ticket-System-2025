@@ -4,6 +4,7 @@
 #include "settings.hpp"
 #include "ticket_manager.hpp"
 #include "train_manager.hpp"
+#include "utility/wrappers.hpp"
 
 #include <variant>
 
@@ -12,6 +13,7 @@ namespace ticket {
       private:
         AccountManager account_manager_;
         TrainManager train_manager_;
+        TicketManager ticket_manager_;
 
         using LogLevel = norb::LogLevel;
         using account_id_t = Account::id_t;
@@ -113,7 +115,7 @@ namespace ticket {
             }
             const auto current_user_privilege = current_user_info->privilege;
             const auto user_privilege = account_info->privilege;
-            if (user_privilege >= current_user_privilege and not current_user_id == account_id) {
+            if ((user_privilege >= current_user_privilege) and (current_user_id != account_id)) {
                 global_interface::log.as(LogLevel::WARNING)
                     << "QueryProfile failed because privilege underflow: " << current_user_privilege
                     << " <=" << user_privilege << '\n';
@@ -167,6 +169,72 @@ namespace ticket {
             // Update the account info in the stores
             account_manager.change_account_info(account_id, account_info.value());
             return account_info.value();
+        }
+
+        static int add_train(const std::string &train_group_name, const int &station_num, const int &seat_num,
+                             const ConcentratedString<std::string> &station_names,
+                             const ConcentratedString<int> &prices, const norb::Datetime::Time &start_time,
+                             const ConcentratedString<int> &travel_times, const ConcentratedString<int> &stopover_times,
+                             const ConcentratedString<norb::Datetime::Date> &sale_date, const char &type) {
+            auto &train_manager = get_instance().train_manager_;
+            auto &ticket_manager = get_instance().ticket_manager_;
+
+            try {
+                const auto decoded_station_names = station_names.as_vector();
+                const auto decoded_prices = prices.as_vector();
+                const auto decoded_travel_times = travel_times.as_vector();
+                const auto decoded_stopover_times = stopover_times.as_vector();
+                // assertions for the input data
+                assert(decoded_station_names.size() == station_num);
+                assert(decoded_prices.size() == station_num - 1);
+                assert(decoded_travel_times.size() == station_num - 1);
+                assert(decoded_stopover_times.size() == station_num - 2);
+                // build the segments for the train manager
+                std::vector<TrainGroupStationSegment> segments;
+                auto delta_time = norb::DeltaDatetime(start_time);
+                // record the stations
+                for (int i = 0; i < station_num; ++i) {
+                    Datetime arrival_time, departure_time;
+                    if (i == 0) {
+                        arrival_time = departure_time = delta_time;
+                    } else {
+                        arrival_time = (delta_time += Datetime::from_minutes(decoded_travel_times[i - 1]));
+                        if (i < station_num - 1) {
+                            departure_time = (delta_time += Datetime::from_minutes(decoded_stopover_times[i - 1]));
+                        }
+                    }
+                    global_interface::log.as(LogLevel::DEBUG)
+                        << "Adding segment for station " << decoded_station_names[i] << ": "
+                        << "arrival at " << arrival_time << ", departure at " << departure_time << '\n';
+                    segments.emplace_back(
+                        TrainManager::station_id_from_name(decoded_station_names[i]),
+                        arrival_time,
+                        departure_time,
+                        i < station_num - 1 ? decoded_prices[i] : 0 // Last station has no price
+                    );
+                }
+                // register into the train manager
+                const auto decoded_sale_date = sale_date.as_vector();
+                assert(decoded_sale_date.size() == 2);
+                train_manager.add_train_group(
+                    train_group_name, segments, seat_num,
+                    decoded_sale_date[0], decoded_sale_date[1], type
+                );
+                global_interface::log.as(LogLevel::DEBUG)
+                    << "Train group " << train_group_name << " has been registered in the train manager" << '\n';
+                // register into the ticket manager
+                ticket_manager.add_train_group(
+                    TrainManager::train_group_id_from_name(train_group_name),
+                    decoded_prices, norb::Range<norb::Datetime::Date>(decoded_sale_date[0], decoded_sale_date[1]),
+                    seat_num
+                );
+                global_interface::log.as(LogLevel::DEBUG)
+                    << "Train group " << train_group_name << " has been registered in the ticket manager" << '\n';
+                return 0;
+            } catch (std::runtime_error &e) {
+                global_interface::log.as(LogLevel::WARNING) << "Add train failed: " << e.what() << '\n';
+                return -1;
+            }
         }
     };
 } // namespace ticket

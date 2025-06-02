@@ -73,4 +73,17 @@ void register_commands(CommandRegistry &cmdr) {
                               {'m', std::nullopt}, // mail address
                               {'g', std::nullopt}  // privilege
                           });
+    cmdr.register_command("add_train", $print(TicketSystem::add_train),
+                          {
+                              {'i'}, // train group name (aka. trainID)
+                              {'n'}, // station num
+                              {'m'}, // seat num
+                              {'s'}, // station names
+                              {'p'}, // prices
+                              {'x'}, // start time
+                              {'t'}, // travel times
+                              {'o'}, // stopover times
+                              {'d'}, // sale date
+                              {'y'}  // type
+                          });
 }

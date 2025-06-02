@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <ntraits.hpp>
 
 namespace norb {
     // Primary template: attempts to construct T from std::string
@@ -17,7 +18,7 @@ namespace norb {
     }
 
     template <typename T>
-        requires std::is_integral_v<T>
+        requires (std::is_integral_v<T>)
     inline T semantic_cast(const std::string &s) {
         if (s.empty()) {
             return 0; // Empty string means 0
@@ -47,6 +48,11 @@ namespace norb {
         }
         throw std::runtime_error("norb::semantic_cast<bool> failed for '" + s +
                                  "'. Expected true/false/1/0 or empty for false.");
+    }
+
+    // special case: cpp recognizes char as integral
+    template <> inline char semantic_cast<char>(const std::string &s) {
+        return s[0];
     }
 
     template <> inline std::string semantic_cast<std::string>(const std::string &s) {

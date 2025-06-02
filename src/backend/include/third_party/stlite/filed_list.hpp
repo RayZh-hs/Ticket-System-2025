@@ -123,7 +123,7 @@ namespace norb {
             return ret;
         }
 
-        T_ set(const SegmentPointer &seg, const int index, const T_ &to) const {
+        T_ set(const SegmentPointer &seg, const int index, const T_ &to) {
             if (index < 0 || index >= seg.size) {
                 throw std::range_error("norb::FiledSegmentList: INDEX OUT OF RANGE!");
             }
@@ -134,7 +134,7 @@ namespace norb {
 
         SegmentPointer allocate(const int size) {
             assert(f_stream.good());
-            const SegmentPointer seg = {this, size_, size};
+            const SegmentPointer seg = {size_, size};
             size_ += size;
             f_stream.seekp(getPos(size_));
             f_stream.put('\0'); // Ensure the segment is allocated

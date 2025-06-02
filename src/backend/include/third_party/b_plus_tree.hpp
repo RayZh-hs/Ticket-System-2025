@@ -11,6 +11,7 @@
 #include <stlite/range.hpp>
 #include <string>
 #include <type_traits>
+#include <optional>
 
 namespace norb {
     namespace impl {
@@ -644,6 +645,86 @@ namespace norb {
                 remove(key, val);
             }
             return vals.size();
+        }
+
+        void find_first_do(const idx_t &key, const std::function<void(const val_t &)> &function) const {
+            if (tree_height.val == 0)
+                return;
+            MutableHandle handle = root_handle.val;
+            for (int i = 0; i < tree_height.val - 1; i++) {
+                const auto &index_node_ref = *handle.const_ref<IndexNode>();
+                const auto next_node_idx = lower_bound(index_node_ref, key);
+                handle = index_node_ref.children[next_node_idx];
+                assert(!handle.is_nullptr());
+            }
+            const LeafNode *leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            size_t cur = lower_bound(*leaf_node_ref, key);
+            while (true) {
+                for (; cur < leaf_node_ref->size; ++cur) {
+                    if (leaf_node_ref->data[cur].first != key)
+                        return;
+                    function(leaf_node_ref->data[cur].second); // Return first found value
+                    return;
+                }
+                cur = 0;
+                handle = leaf_node_ref->sibling;
+                if (handle.is_nullptr())
+                    return;
+                leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            }
+            return;
+        }
+
+        std::optional<val_t> find_first(const idx_t &key) const {
+            std::optional<val_t> ret;
+            const auto lambda = [&ret](const val_t &val) {
+                if (!ret.has_value()) {
+                    ret = val; // Set the first found value
+                }
+            };
+            find_first_do(key, lambda);
+            return ret;
+        }
+
+        void find_first_in_range_do(Range<idx_t> range, const std::function<void(const val_t &)> &function) const {
+            if (tree_height.val == 0 || range.is_empty())
+                return;
+            MutableHandle handle = root_handle.val;
+            for (int i = 0; i < tree_height.val - 1; i++) {
+                const auto &index_node_ref = *handle.const_ref<IndexNode>();
+                const auto next_node_idx = lower_bound(index_node_ref, range.get_from());
+                handle = index_node_ref.children[next_node_idx];
+                assert(!handle.is_nullptr());
+            }
+            const LeafNode *leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            size_t cur = lower_bound(*leaf_node_ref, range.get_from());
+            while (true) {
+                for (; cur < leaf_node_ref->size; ++cur) {
+                    const auto key_data = leaf_node_ref->data[cur].first;
+                    if (not range.contains_from_right(key_data))
+                        return;
+                    if (range.contains_from_left(key_data)) {
+                        function(leaf_node_ref->data[cur].second);
+                        return;
+                    }
+                }
+                cur = 0;
+                handle = leaf_node_ref->sibling;
+                if (handle.is_nullptr())
+                    return;
+                leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            }
+        }
+
+        std::optional<val_t> find_first_in_range(const Range<idx_t> &range) const {
+            std::optional<val_t> ret;
+            const auto lambda = [&ret](const val_t &val) {
+                if (!ret.has_value()) {
+                    ret = val; // Set the first found value
+                }
+            };
+            find_first_in_range_do(range, lambda);
+            return ret;
         }
 
         void traverse(const bool &do_check = false) const

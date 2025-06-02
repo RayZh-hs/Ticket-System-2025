@@ -14,6 +14,9 @@ namespace ticket {
     inline constexpr int max_station_num = 100;
     inline constexpr int max_station_name_characters = 10;
 
+    inline constexpr const char train_group_segments_name[] = "train_group.segments";
+    inline constexpr const char ticket_hub_segments_name[] = "ticket_hub.segments";
+
     using global_hash_method = norb::hash::Fnv1a64Hash;
     using global_interface = TicketSystemDebugInterface;
 } // namespace ticket

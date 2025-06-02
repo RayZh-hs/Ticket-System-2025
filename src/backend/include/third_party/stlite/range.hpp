@@ -30,6 +30,9 @@ namespace norb {
         bool right_inclusive_ = true;
 
       public:
+        Range() requires std::is_default_constructible_v<T> : from_(), to_() {
+            // Default constructor initializes an empty range.
+        }
         // Defaults to [L, R]
         Range(const T &from_val, const T &to_val) : from_(from_val), to_(to_val) {
         }

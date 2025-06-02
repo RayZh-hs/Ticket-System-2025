@@ -445,7 +445,7 @@ namespace norb {
             if (root_node_is == node_type::index) {
                 // An index root underflows if it has 0 keys (implying 1 child)
                 // This single child becomes the new root.
-                assert(old_root_handle.const_ref<IndexNode>()->size == 0 &&
+                assert(old_root_handle.const_ref<IndexNode>()->size == 1 &&    // done part of fix
                        "Index root underflow implies 0 keys, 1 child");
                 root_handle.val = old_root_handle.const_ref<IndexNode>()->children[0];
                 PersistentMemory::remove<IndexNode>(old_root_handle);
@@ -521,6 +521,34 @@ namespace norb {
                         return;
                     if (range.contains_from_left(key_data))
                         function(leaf_node_ref->data[cur].second);
+                }
+                cur = 0;
+                handle = leaf_node_ref->sibling;
+                if (handle.is_nullptr())
+                    return;
+                leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            }
+        }
+
+        void find_all_in_range_do(Range<idx_t> range, const std::function<void(const idx_t &, const val_t &)> &function) const {
+            if (tree_height.val == 0 || range.is_empty())
+                return;
+            MutableHandle handle = root_handle.val;
+            for (int i = 0; i < tree_height.val - 1; i++) {
+                const auto &index_node_ref = *handle.const_ref<IndexNode>();
+                const auto next_node_idx = lower_bound(index_node_ref, range.get_from());
+                handle = index_node_ref.children[next_node_idx];
+                assert(!handle.is_nullptr());
+            }
+            const LeafNode *leaf_node_ref = handle.const_ref<LeafNode>().as_raw_ptr();
+            size_t cur = lower_bound(*leaf_node_ref, range.get_from());
+            while (true) {
+                for (; cur < leaf_node_ref->size; ++cur) {
+                    const auto key_data = leaf_node_ref->data[cur].first;
+                    if (not range.contains_from_right(key_data))
+                        return;
+                    if (range.contains_from_left(key_data))
+                        function(key_data, leaf_node_ref->data[cur].second);
                 }
                 cur = 0;
                 handle = leaf_node_ref->sibling;
@@ -632,7 +660,7 @@ namespace norb {
                 assert(history.empty() && tree_height.val > 1);
                 // If index root has 0 keys (size refers to keys), it means it has 1 child.
                 // This child becomes the new root.
-                if (root_handle.val.const_ref<IndexNode>()->size == 0) {
+                if (root_handle.val.const_ref<IndexNode>()->size <= 1) {    // done does this fix work? seems to have
                     handle_root_underflow(node_type::index);
                 }
             }
@@ -645,6 +673,21 @@ namespace norb {
                 remove(key, val);
             }
             return vals.size();
+        }
+
+        int remove_all_in_range(const Range<idx_t> &range) {
+            vector<idx_t> keys_to_remove;
+            vector<val_t> vals_to_remove;
+            auto lambda = [&keys_to_remove, &vals_to_remove](const idx_t &idx, const val_t &val) {
+                keys_to_remove.push_back(idx);
+                vals_to_remove.push_back(val);
+            };
+            find_all_in_range_do(range, lambda);
+            for (int i = 0; i < keys_to_remove.size(); ++i) {
+                remove(keys_to_remove[i], vals_to_remove[i]);
+                // traverse(true);
+            }
+            return keys_to_remove.size();
         }
 
         void find_first_do(const idx_t &key, const std::function<void(const val_t &)> &function) const {

@@ -162,30 +162,26 @@ namespace norb {
             return !(*this == other);
         }
 
-        bool operator<(const Datetime &other) const {
+        auto operator<=>(const Datetime &other) const {
             if (date.month != other.date.month)
-                return date.month < other.date.month;
+                return date.month <=> other.date.month;
             if (date.day != other.date.day)
-                return date.day < other.date.day;
+                return date.day <=> other.date.day;
             if (time.hour != other.time.hour)
-                return time.hour < other.time.hour;
-            return time.minute < other.time.minute;
-        }
-
-        bool operator<=(const Datetime &other) const {
-            return (*this < other) || (*this == other);
-        }
-
-        bool operator>(const Datetime &other) const {
-            return !(*this <= other);
-        }
-
-        bool operator>=(const Datetime &other) const {
-            return !(*this < other);
+                return time.hour <=> other.time.hour;
+            return time.minute <=> other.time.minute;
         }
 
         explicit operator std::string() const {
             return static_cast<std::string>(date) + " " + static_cast<std::string>(time);
+        }
+
+        static Datetime max() {
+            return from_datetime(12, 31, 23, 59);
+        }
+
+        static Datetime min() {
+            return from_datetime(1, 1, 0, 0);
         }
     };
 

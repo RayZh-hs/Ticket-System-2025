@@ -1,6 +1,20 @@
 #pragma once
 
+#include <type_traits>
+#include <limits>
+
 namespace norb {
+
+    namespace impl
+    {
+        template <typename T>
+        concept HasMinMax = requires(T a) {
+            { a.min() } -> std::convertible_to<T>;
+            { a.max() } -> std::convertible_to<T>;
+        };
+    } // namespace impl
+    
+
     // A simple class denoting a range with configurable inclusiveness.
     // It represents mathematical intervals like [from, to], (from, to), [from, to), or (from, to].
     template <typename T> class Range {
@@ -92,6 +106,16 @@ namespace norb {
                 return !(left_inclusive_ && right_inclusive_);
             }
             return false;
+        }
+
+        static Range<T> full_range() {
+            if constexpr (impl::HasMinMax<T>) {
+                return Range<T>(T::min(), T::max());
+            } else if constexpr (std::is_arithmetic_v<T>) {
+                return Range<T>(std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max());
+            } else {
+                static_assert(false, "Type T must have min() and max() methods or be an arithmetic type.");
+            }
         }
     };
 } // namespace norb

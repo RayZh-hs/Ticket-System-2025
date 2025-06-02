@@ -156,11 +156,6 @@ namespace norb {
                 ++(*this);
                 return temp;
             }
-
-            std::ostream &operator<<(std::ostream &os) const {
-                os << static_cast<std::string>(*this);
-                return os;
-            }
         };
 
         struct Time {
@@ -357,11 +352,21 @@ namespace norb {
         static Datetime min() {
             return Datetime(1, 1, 0, 0);
         }
-
-        friend std::ostream &operator<<(std::ostream &os, const Datetime &dt) {
-            return os << static_cast<std::string>(dt);
-        }
     };
+
+    inline std::ostream &operator<<(std::ostream &os, const Datetime &dt) {
+        return os << static_cast<std::string>(dt);
+    }
+
+    inline std::ostream &operator<<(std::ostream &os, const Datetime::Date &date) {
+        os << static_cast<std::string>(date);
+        return os;
+    }
+
+    inline std::ostream &operator<<(std::ostream &os, const Datetime::Time &time) {
+        os << static_cast<std::string>(time);
+        return os;
+    }
 
     inline Datetime::Date::operator Datetime() const {
         return Datetime::from_date(month, day);

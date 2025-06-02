@@ -578,6 +578,18 @@ namespace norb {
             }
         }
 
+        size_t count(const idx_t &key) const {
+            size_t counter = 0;
+            find_all_do(key, [&counter](const val_t &) { counter++; });
+            return counter;
+        }
+
+        size_t count_in_range(const Range<idx_t> &range) const {
+            size_t counter = 0;
+            find_all_in_range_do(range, [&counter](const val_t &) { counter++; });
+            return counter;
+        }
+
         bool remove(const idx_t &key, const val_t &val) {
             if (tree_height.val == 0)
                 return false;

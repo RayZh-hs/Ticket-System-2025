@@ -58,14 +58,17 @@ namespace ticket {
       public:
         using train_group_id_t = TrainGroup::train_group_id_t;
         using station_name_t = norb::FixedUTF8String<max_station_name_characters * max_bytes_per_chinese_char>;
+        using station_id_t = hash_t;
         using interface = global_interface;
         using LogLevel = norb::LogLevel;
 
       private:
         norb::BPlusTree<train_group_id_t, TrainGroup, norb::MANUAL> train_group_store;
         norb::BPlusTree<train_group_id_t, bool, norb::MANUAL> train_group_release_store;
-        norb::BPlusTree<train_group_id_t, station_name_t, norb::MANUAL> train_group_station_name_store;
+        norb::BPlusTree<station_id_t, station_name_t, norb::MANUAL> station_name_store;
+        norb::BPlusTree<station_id_t, train_group_id_t, norb::AUTOMATIC> station_train_group_lookup_store;
         SegmentList<TrainGroupStationSegment> train_group_segments;
+        using TrainGroupSegmentPointer = SegmentList<TrainGroupStationSegment>::SegmentPointer;
 
       public:
         TrainManager() : train_group_segments(train_group_segments_name) {
@@ -77,6 +80,21 @@ namespace ticket {
 
         static auto station_id_from_name(const std::string &name) {
             return global_hash_method::hash(name);
+        }
+
+        std::optional<station_name_t> station_name_from_id(const station_id_t &id) {
+            return station_name_store.find_first(id);
+        }
+
+        void register_station(const station_name_t &station_name) {
+            const auto station_id = station_id_from_name(static_cast<std::string>(station_name));
+            if (not station_name_store.count(station_id)) {
+                station_name_store.insert(station_id, station_name);
+            }
+        }
+
+        bool exists_train_group(const station_id_t &station_id) {
+            return train_group_store.count(station_id);
         }
 
         void add_train_group(const std::string &train_group_name, const std::vector<TrainGroupStationSegment> &segments,
@@ -129,6 +147,14 @@ namespace ticket {
             // there is no need to remove segments from train_group_segments since it is a dynamic segment list
             assert(train_group_store.remove_all(train_group_id));
             assert(train_group_release_store.remove(train_group_id, false));
+        }
+
+        std::optional<TrainGroup> get_train_group(const train_group_id_t &train_group_id) const {
+            return train_group_store.find_first(train_group_id);
+        }
+
+        auto get_train_group_segment(const TrainGroupSegmentPointer &seg_ptr, const int cursor) const {
+            return train_group_segments.get(seg_ptr, cursor);
         }
     };
 } // namespace ticket

@@ -5,7 +5,6 @@
 #include "stlite/filed_list.hpp"
 #include "stlite/pair.hpp"
 
-
 #include "settings.hpp"
 
 #include <utility>
@@ -84,13 +83,14 @@ namespace ticket {
 
       private:
         using LogLevel = norb::LogLevel;
+        using TrainStatusSegmentPointer = TrainStatus::SegmentList::SegmentPointer;
 
         norb::BPlusTree<Order::order_id_t, Order, norb::MANUAL> purchase_history_store;
         norb::BPlusTree<train_id_t, TrainStatus, norb::MANUAL> train_status_store;
-        norb::FiledSegmentList<TrainStatusStationSegment> ticket_hub_segments;
+        norb::FiledSegmentList<TrainStatusStationSegment> train_status_station_segments;
 
       public:
-        TicketManager() : ticket_hub_segments(ticket_hub_segments_name) {
+        TicketManager() : train_status_station_segments(ticket_hub_segments_name) {
         }
 
         void add_train_group(const train_group_id_t &train_group_id, const norb::vector<price_t> &prices,
@@ -99,12 +99,13 @@ namespace ticket {
                 throw std::runtime_error("Train group already exists.");
             }
             for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); ++date) {
-                auto segment_pointer = ticket_hub_segments.allocate(prices.size());
+                auto segment_pointer = train_status_station_segments.allocate(prices.size());
                 interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
                                                    << ", size=" << segment_pointer.size << ")\n";
                 for (size_t i = 0; i < prices.size(); ++i) {
-                    ticket_hub_segments.set(segment_pointer, i, {prices[i], seat_num});
-                    interface::log.as(LogLevel::DEBUG) << "Segment set to: price=" << prices[i] << " seats=" << seat_num << "\n";
+                    train_status_station_segments.set(segment_pointer, i, {prices[i], seat_num});
+                    interface::log.as(LogLevel::DEBUG)
+                        << "Segment set to: price=" << prices[i] << " seats=" << seat_num << "\n";
                 }
                 const auto train_id = train_id_t{train_group_id, date};
                 train_status_store.insert(train_id, {train_id, segment_pointer});
@@ -112,11 +113,17 @@ namespace ticket {
         }
 
         void remove_train_group(const train_group_id_t &train_group_id) {
-            train_status_store.remove_all_in_range(norb::unpack_range(
-                train_group_id,
-                norb::Range<Date>::full_range()
-            ));
-            interface::log.as(LogLevel::DEBUG) << "From ticket_manager: Removed train group with ID: " << train_group_id << "\n";
+            train_status_store.remove_all_in_range(norb::unpack_range(train_group_id, norb::Range<Date>::full_range()));
+            interface::log.as(LogLevel::DEBUG)
+                << "From ticket_manager: Removed train group with ID: " << train_group_id << "\n";
+        }
+
+        auto get_train_status(const train_id_t &train_id) const {
+            return train_status_store.find_first(train_id);
+        }
+
+        auto get_train_status_station_segment(const TrainStatusSegmentPointer &seg_ptr, const int cursor) const {
+            return train_status_station_segments.get(seg_ptr, cursor);
         }
     };
 } // namespace ticket

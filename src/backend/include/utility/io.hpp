@@ -20,6 +20,10 @@ namespace ticket {
             return std::cout;
         }
 
+        [[nodiscard]] auto &as(std::nullptr_t) const {
+            return std::cout;
+        }
+
         void set_timestamp(const int &t) {
             timestamp = t;
         }

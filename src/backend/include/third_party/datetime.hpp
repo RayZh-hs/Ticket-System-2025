@@ -156,6 +156,11 @@ namespace norb {
                 ++(*this);
                 return temp;
             }
+
+            std::ostream &operator<<(std::ostream &os) const {
+                os << static_cast<std::string>(*this);
+                return os;
+            }
         };
 
         struct Time {

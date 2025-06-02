@@ -261,6 +261,8 @@ namespace norb
             std::remove(settings::PMEM_FILE_NAME.c_str());
             std::remove(settings::NPMEM_FILE_NAME.c_str());
             std::remove("persistent.config");
+            std::remove("ticket_hub.segments");
+            std::remove("train_group.segments");
         }
     }; // namespace chore
 } // namespace norb

@@ -199,12 +199,12 @@ namespace norb {
             if (f_stream.is_open()) f_stream.close();
         }
 
-        struct Segment {
+        struct SegmentPointer {
             int cur;  // Start index of this segment in the global list
             int size; // Number of elements in this segment
         };
 
-        T_ get(const Segment &seg, const int index) const {
+        T_ get(const SegmentPointer &seg, const int index) const {
             assert(f_stream.good() && "FiledSegmentList: f_stream not good at start of get");
             if (index < 0 || index >= seg.size) {
                 throw std::range_error("norb::FiledSegmentList: INDEX OUT OF RANGE!");
@@ -218,7 +218,7 @@ namespace norb {
             return ret;
         }
 
-        T_ set(const Segment &seg, const int index, const T_ &to) const { // Pass T_ by const ref
+        T_ set(const SegmentPointer &seg, const int index, const T_ &to) const { // Pass T_ by const ref
             assert(f_stream.good() && "FiledSegmentList: f_stream not good at start of set");
             if (index < 0 || index >= seg.size) {
                 throw std::range_error("norb::FiledSegmentList: INDEX OUT OF RANGE!");
@@ -231,10 +231,10 @@ namespace norb {
             return to;
         }
 
-        Segment allocate(const int segment_len) { 
+        SegmentPointer allocate(const int segment_len) { 
             assert(f_stream.good() && "FiledSegmentList: f_stream not good at start of allocate");
             
-            const Segment seg = {size_, segment_len}; // Corrected: size_ is current total, segment_len is for this segment
+            const SegmentPointer seg = {size_, segment_len}; // Corrected: size_ is current total, segment_len is for this segment
             
             int old_total_size = size_;
             size_ += segment_len;

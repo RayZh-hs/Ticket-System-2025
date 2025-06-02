@@ -3,6 +3,8 @@
 #include <type_traits>
 #include <limits>
 
+#include "pair.hpp"
+
 namespace norb {
 
     namespace impl
@@ -118,4 +120,18 @@ namespace norb {
             }
         }
     };
+
+    // Unpacks (a, range) to Range((a, range.from()), (a, range.to())).
+    // a is not a range
+    template <typename A, typename T> requires (!std::is_same_v<A, Range<T>>)
+    auto unpack_range(const A &a, const Range<T> &range) {
+        return Range(norb::make_pair(a, range.get_from()), norb::make_pair(a, range.get_to()));
+    }
+
+    // Unpacks (range, b) to Range((range.from(), b), (range.to(), b)).
+    // b is not a range
+    template <typename T, typename B>
+    auto unpack_range(const Range<T> &range, const B &b) {
+        return Range(norb::make_pair(range.get_from(), b), norb::make_pair(range.get_to(), b));
+    }
 } // namespace norb

@@ -8,6 +8,7 @@
 #include <string>
 
 namespace norb {
+
     struct time_overflow_error : std::runtime_error {
         time_overflow_error() : std::runtime_error("Timestamp results in a date beyond 2025") {
         }
@@ -64,9 +65,9 @@ namespace norb {
                 assert(repr.size() == 5 && repr[2] == '-');
                 month = semantic_cast<int>(repr.substr(0, 2));
                 day = semantic_cast<int>(repr.substr(3, 2));
-                assert(month >= 1 && month <= 12 && "Parsed month out of range");
+                assert(month >= 1 && month <= 12);
                 if (month >= 1 && month <= 12) {
-                    assert(day >= 1 && day <= impl::DAYS_IN_MONTH_DATA[month] && "Parsed day out of range for month");
+                    assert(day >= 1 && day <= impl::DAYS_IN_MONTH_DATA[month]);
                 }
             }
 
@@ -97,38 +98,63 @@ namespace norb {
                 return Date{1, 1};
             }
 
+            Date &operator+=(const Date &delta) {
+                month += delta.month;
+                day += delta.day;
+
+                // Normalize the date
+                while (day > impl::DAYS_IN_MONTH_DATA[month]) {
+                    day -= impl::DAYS_IN_MONTH_DATA[month];
+                    month++;
+                    if (month > 12) {
+                        month = 1;
+                    }
+                }
+                return *this;
+            }
+
             Date operator+(const Date &delta) const {
                 Date result = *this;
-                result.month += delta.month;
-                result.day += delta.day;
-
-                if (result.month >= 1 && result.month <= 12) {
-                    while (result.day > impl::DAYS_IN_MONTH_DATA[result.month]) {
-                        result.day -= impl::DAYS_IN_MONTH_DATA[result.month];
-                        result.month++;
-                        if (result.month > 12) {
-                            result.month = 1;
-                        }
-                    }
-                    while (result.day < 1) {
-                        result.month--;
-                        if (result.month < 1) {
-                            result.month = 12;
-                        }
-                        result.day += impl::DAYS_IN_MONTH_DATA[result.month];
-                    }
-                }
-                assert(result.month >= 1 && result.month <= 12 && "Month out of range after Date::operator+");
-                if (result.month >= 1 && result.month <= 12) {
-                    assert(result.day >= 1 && result.day <= impl::DAYS_IN_MONTH_DATA[result.month] &&
-                           "Day out of range after Date::operator+");
-                }
+                result += delta;
                 return result;
             }
 
-            Date &operator+=(const Date &delta) {
-                *this = *this + delta;
+            Date &operator+=(const int days) {
+                day += days;
+
+                // Normalize the date
+                while (day > impl::DAYS_IN_MONTH_DATA[month]) {
+                    day -= impl::DAYS_IN_MONTH_DATA[month];
+                    month++;
+                    if (month > 12) {
+                        month = 1;
+                    }
+                }
                 return *this;
+            }
+
+            Date operator+(const int days) const {
+                Date result = *this;
+                result += days;
+                return result;
+            }
+
+            Date &operator++() { // prefix increment
+                day++;
+                if (day > impl::DAYS_IN_MONTH_DATA[month]) {
+                    day = 1;
+                    month++;
+                    if (month > 12) {
+                        month = 1;
+                    }
+                }
+                return *this;
+            }
+
+            Date operator++(int) { // postfix increment
+                Date temp = *this;
+                ++(*this);
+                return temp;
             }
         };
 
@@ -142,8 +168,8 @@ namespace norb {
                 assert(repr.size() == 5 && repr[2] == ':');
                 hour = semantic_cast<int>(repr.substr(0, 2));
                 minute = semantic_cast<int>(repr.substr(3, 2));
-                assert(hour >= 0 && hour <= 23 && "Parsed hour out of range");
-                assert(minute >= 0 && minute <= 59 && "Parsed minute out of range");
+                assert(hour >= 0 && hour <= 23);
+                assert(minute >= 0 && minute <= 59);
             }
 
             bool operator==(const Time &other) const {
@@ -173,29 +199,16 @@ namespace norb {
       private:
         int total_minutes_since_epoch;
 
-        void _update_components_from_total_minutes() {
-            assert(total_minutes_since_epoch >= 0 && total_minutes_since_epoch < impl::TOTAL_MINUTES_IN_YEAR);
-
-            int m = 1;
-            for (m = 1; m <= 12; ++m) {
-                if (total_minutes_since_epoch < impl::CUMULATIVE_MINUTES_HOLDER.values[m + 1]) {
-                    break;
-                }
+        void _check_bounds_and_throw() {
+            if (total_minutes_since_epoch < 0) {
+                throw time_underflow_error();
             }
-            this->date.month = m;
-
-            int minutes_into_month = total_minutes_since_epoch - impl::CUMULATIVE_MINUTES_HOLDER.values[m];
-            this->date.day = minutes_into_month / impl::MINUTES_PER_DAY + 1;
-
-            int minutes_into_day = minutes_into_month % impl::MINUTES_PER_DAY;
-            this->time.hour = minutes_into_day / impl::MINUTES_PER_HOUR;
-            this->time.minute = minutes_into_day % impl::MINUTES_PER_HOUR;
+            if (total_minutes_since_epoch >= impl::TOTAL_MINUTES_IN_YEAR) {
+                throw time_overflow_error();
+            }
         }
 
       public:
-        Date date;
-        Time time;
-
         Datetime(int m, int d, int h, int mn) {
             if (m < 1 || m > 12 || d < 1 || (m >= 1 && m <= 12 && d > impl::DAYS_IN_MONTH_DATA[m]) || h < 0 || h > 23 ||
                 mn < 0 || mn > 59) {
@@ -204,23 +217,13 @@ namespace norb {
 
             total_minutes_since_epoch = impl::CUMULATIVE_MINUTES_HOLDER.values[m] + (d - 1) * impl::MINUTES_PER_DAY +
                                         h * impl::MINUTES_PER_HOUR + mn;
-
-            if (total_minutes_since_epoch < 0)
-                throw time_underflow_error();
-            if (total_minutes_since_epoch >= impl::TOTAL_MINUTES_IN_YEAR)
-                throw time_overflow_error();
-
-            this->date.month = m;
-            this->date.day = d;
-            this->time.hour = h;
-            this->time.minute = mn;
+            _check_bounds_and_throw();
         }
 
         Datetime(const Date &d_val, const Time &t_val) : Datetime(d_val.month, d_val.day, t_val.hour, t_val.minute) {
         }
 
         Datetime() : total_minutes_since_epoch(0) {
-            _update_components_from_total_minutes();
         }
 
         explicit Datetime(const std::string &repr) {
@@ -238,13 +241,7 @@ namespace norb {
             total_minutes_since_epoch = impl::CUMULATIVE_MINUTES_HOLDER.values[d_parsed.month] +
                                         (d_parsed.day - 1) * impl::MINUTES_PER_DAY +
                                         t_parsed.hour * impl::MINUTES_PER_HOUR + t_parsed.minute;
-
-            if (total_minutes_since_epoch < 0)
-                throw time_underflow_error();
-            if (total_minutes_since_epoch >= impl::TOTAL_MINUTES_IN_YEAR)
-                throw time_overflow_error();
-
-            _update_components_from_total_minutes();
+            _check_bounds_and_throw();
         }
 
         static Datetime from_date(int m, int d) {
@@ -257,57 +254,78 @@ namespace norb {
             return Datetime(m, d, h, mn);
         }
         static Datetime from_minutes(int total_minutes) {
-            if (total_minutes < 0)
-                throw time_underflow_error();
-            if (total_minutes >= impl::TOTAL_MINUTES_IN_YEAR)
-                throw time_overflow_error();
-
             Datetime dt;
             dt.total_minutes_since_epoch = total_minutes;
-            dt._update_components_from_total_minutes();
+            dt._check_bounds_and_throw();
             return dt;
         }
 
-        void normalize() {
-            if (total_minutes_since_epoch < 0) {
-                throw time_underflow_error();
+        int getMonth() const {
+            assert(total_minutes_since_epoch >= 0 && total_minutes_since_epoch < impl::TOTAL_MINUTES_IN_YEAR);
+            int m = 1;
+            for (m = 1; m <= 12; ++m) {
+                if (total_minutes_since_epoch < impl::CUMULATIVE_MINUTES_HOLDER.values[m + 1]) {
+                    break;
+                }
             }
-            if (total_minutes_since_epoch >= impl::TOTAL_MINUTES_IN_YEAR) {
-                throw time_overflow_error();
-            }
-            _update_components_from_total_minutes();
+            return m;
+        }
+
+        int getDay() const {
+            assert(total_minutes_since_epoch >= 0 && total_minutes_since_epoch < impl::TOTAL_MINUTES_IN_YEAR);
+            int m = getMonth();
+            int minutes_into_month = total_minutes_since_epoch - impl::CUMULATIVE_MINUTES_HOLDER.values[m];
+            return minutes_into_month / impl::MINUTES_PER_DAY + 1;
+        }
+
+        int getHour() const {
+            assert(total_minutes_since_epoch >= 0 && total_minutes_since_epoch < impl::TOTAL_MINUTES_IN_YEAR);
+            return (total_minutes_since_epoch % impl::MINUTES_PER_DAY) / impl::MINUTES_PER_HOUR;
+        }
+
+        int getMinute() const {
+            assert(total_minutes_since_epoch >= 0 && total_minutes_since_epoch < impl::TOTAL_MINUTES_IN_YEAR);
+            return total_minutes_since_epoch % impl::MINUTES_PER_HOUR;
+        }
+
+        Date getDate() const {
+            return Date(getMonth(), getDay());
+        }
+
+        Time getTime() const {
+            return Time(getHour(), getMinute());
         }
 
         Datetime operator+(const Datetime &other) const {
             Datetime result;
             result.total_minutes_since_epoch = this->total_minutes_since_epoch + other.total_minutes_since_epoch;
-            result.normalize();
+            result._check_bounds_and_throw();
             return result;
         }
 
         Datetime operator-(const Datetime &other) const {
             Datetime result;
             result.total_minutes_since_epoch = this->total_minutes_since_epoch - other.total_minutes_since_epoch;
-            result.normalize();
+            result._check_bounds_and_throw();
             return result;
         }
 
         Datetime &operator+=(const Datetime &other) {
             this->total_minutes_since_epoch += other.total_minutes_since_epoch;
-            this->normalize();
+            this->_check_bounds_and_throw();
             return *this;
         }
 
         Datetime &operator-=(const Datetime &other) {
             this->total_minutes_since_epoch -= other.total_minutes_since_epoch;
-            this->normalize();
+            this->_check_bounds_and_throw();
             return *this;
         }
 
         [[nodiscard]] Datetime diff(const Datetime &other) const {
             Datetime result;
             result.total_minutes_since_epoch = this->total_minutes_since_epoch - other.total_minutes_since_epoch;
-            result.normalize();
+            result._check_bounds_and_throw();
             return result;
         }
 
@@ -324,7 +342,7 @@ namespace norb {
         }
 
         explicit operator std::string() const {
-            return static_cast<std::string>(date) + " " + static_cast<std::string>(time);
+            return static_cast<std::string>(getDate()) + " " + static_cast<std::string>(getTime());
         }
 
         static Datetime max() {

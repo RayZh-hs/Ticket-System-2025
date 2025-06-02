@@ -98,8 +98,7 @@ namespace ticket {
             if (train_status_store.count({train_group_id, sale_date_range.get_from()})) {
                 throw std::runtime_error("Train group already exists.");
             }
-            const auto one_day = norb::Datetime::Date(0, 1);
-            for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); date = date + one_day) {
+            for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); ++date) {
                 auto segment_pointer = ticket_hub_segments.allocate(prices.size());
                 interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
                                                    << ", size=" << segment_pointer.size << ")\n";

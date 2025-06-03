@@ -18,6 +18,14 @@ namespace norb {
 
   // Implementation
   template <typename T> class vector {
+  public:
+    using value_type = T;
+    using reference = T &;
+    using const_reference = const T &;
+    using pointer = T *;
+    using const_pointer = const T *;
+    using size_type = size_t;
+    
   private:
     static constexpr size_t STARTUP_SIZE = 16;
     static constexpr float MULTIPLIER = 2.;

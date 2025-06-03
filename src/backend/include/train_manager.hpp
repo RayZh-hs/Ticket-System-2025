@@ -12,14 +12,13 @@
 #include "settings.hpp"
 
 namespace ticket {
-    template <typename T_> using SegmentList = norb::FiledSegmentList<T_>;
     using norb::Datetime;
     using norb::DeltaDatetime;
     using Date = Datetime::Date;
     using Time = Datetime::Time;
     using hash_t = global_hash_method::hash_t;
 
-    struct TrainGroupStationSegment {
+    struct TrainGroupSegment {
         using station_id_t = hash_t;
         using price_t = int;
 
@@ -30,13 +29,14 @@ namespace ticket {
     };
 
     struct TrainGroup {
+        using SegmentList = norb::FiledSegmentList<TrainGroupSegment>;
         using train_group_name_t = norb::FixedUTF8String<max_train_id_length>;
         using train_group_id_t = hash_t;
         using seat_num_t = int;
         using type_t = char;
 
         train_group_name_t train_group_name;
-        SegmentList<TrainGroupStationSegment>::SegmentPointer segment_pointer = {0, 0};
+        SegmentList::SegmentPointer segment_pointer = {0, 0};
         seat_num_t seat_num = 0;
         norb::Range<Date> sale_date_range;
         type_t train_type = '\0';
@@ -74,13 +74,14 @@ namespace ticket {
         };
 
       private:
+        using SegmentList = norb::FiledSegmentList<TrainGroupSegment>;
+        using TrainGroupSegmentPointer = SegmentList::SegmentPointer;
         norb::BPlusTree<train_group_id_t, TrainGroup, norb::MANUAL> train_group_store;
         norb::BPlusTree<train_group_id_t, bool, norb::MANUAL> train_group_release_store;
         norb::BPlusTree<station_id_t, station_name_t, norb::MANUAL> station_name_store;
         // this lookup table keeps track of all RELEASED stores
         norb::BPlusTree<station_id_t, StationLookupStruct, norb::AUTOMATIC> station_train_group_lookup_store;
-        SegmentList<TrainGroupStationSegment> train_group_segments;
-        using TrainGroupSegmentPointer = SegmentList<TrainGroupStationSegment>::SegmentPointer;
+        SegmentList train_group_segments;
 
       public:
         TrainManager() : train_group_segments(train_group_segments_name) {
@@ -113,7 +114,7 @@ namespace ticket {
             }
         }
 
-        void add_train_group(const std::string &train_group_name, const std::vector<TrainGroupStationSegment> &segments,
+        void add_train_group(const std::string &train_group_name, const std::vector<TrainGroupSegment> &segments,
                              const int &seat_num, const Date &sale_start_date, const Date &sale_end_date,
                              const char &train_type) {
             assert(seat_num > 0);

@@ -204,7 +204,7 @@ namespace ticket {
                 assert(decoded_travel_times.size() == station_num - 1);
                 assert(decoded_stopover_times.size() == station_num - 2);
                 // build the segments for the train manager
-                std::vector<TrainGroupStationSegment> segments;
+                std::vector<TrainGroupSegment> segments;
                 auto delta_time = norb::DeltaDatetime(start_time);
                 // record the stations
                 for (int i = 0; i < station_num; ++i) {
@@ -361,7 +361,7 @@ namespace ticket {
             // find all trains that leave at from at date and arrive in to
             const auto &train_query_result = train_manager.query_ticket(from_id, to_id, date);
             // from ticket_manager retrieve the financial information
-            norb::vector<TrainStatusStationSegment> financial_info;
+            norb::vector<TrainFareSegment> financial_info;
             for (const auto &train_item : train_query_result) {
                 financial_info.push_back(ticket_manager.get_price_seat_for_section(
                     train_item.train_id, train_item.from_station, train_item.to_station));

@@ -17,25 +17,25 @@ namespace ticket {
 
     using train_id_t = norb::Pair<train_group_id_t, Date>;
 
-    struct TrainStatusStationSegment {
+    struct TrainFareSegment {
         using station_id_t = hash_t;
         using price_t = int;
 
         price_t price; // the price from this station to the next
         int remaining_seats = 0;
 
-        TrainStatusStationSegment operator&(const TrainStatusStationSegment &other) const {
+        TrainFareSegment operator&(const TrainFareSegment &other) const {
             return {price + other.price, std::min(remaining_seats, other.remaining_seats)};
         }
     };
 
-    struct TrainStatus {
-        using SegmentList = norb::FiledSegmentList<TrainStatusStationSegment>;
+    struct TrainFare {
+        using SegmentList = norb::FiledSegmentList<TrainFareSegment>;
 
         train_id_t train_id;
         SegmentList::SegmentPointer segment_pointer;
 
-        TrainStatusStationSegment join_segments(const SegmentList &seg_ref, const int from, const int to) const {
+        TrainFareSegment join_segments(const SegmentList &seg_ref, const int from, const int to) const {
             if (from < 0 || to >= segment_pointer.size || from > to) {
                 throw std::runtime_error("Invalid segment range query");
             }
@@ -46,11 +46,11 @@ namespace ticket {
             return ans;
         }
 
-        bool operator!=(const TrainStatus &other) const {
+        bool operator!=(const TrainFare &other) const {
             return train_id != other.train_id;
         }
 
-        auto operator<=>(const TrainStatus &other) const {
+        auto operator<=>(const TrainFare &other) const {
             return train_id <=> other.train_id;
         }
     };
@@ -85,11 +85,11 @@ namespace ticket {
 
       private:
         using LogLevel = norb::LogLevel;
-        using TrainStatusSegmentPointer = TrainStatus::SegmentList::SegmentPointer;
+        using TrainStatusSegmentPointer = TrainFare::SegmentList::SegmentPointer;
 
         norb::BPlusTree<Order::order_id_t, Order, norb::MANUAL> purchase_history_store;
-        norb::BPlusTree<train_id_t, TrainStatus, norb::MANUAL> train_status_store;
-        norb::FiledSegmentList<TrainStatusStationSegment> train_status_station_segments;
+        norb::BPlusTree<train_id_t, TrainFare, norb::MANUAL> train_fare_store;
+        norb::FiledSegmentList<TrainFareSegment> train_fare_segments;
 
         struct TemporalTrainGroupInfo {
             norb::vector<price_t> prices;
@@ -97,9 +97,9 @@ namespace ticket {
             int seat_num = 0;
         };
         norb::BPlusTree<train_group_id_t, TemporalTrainGroupInfo, norb::MANUAL> temporary_train_group_info_store;
-
+    
       public:
-        TicketManager() : train_status_station_segments(ticket_hub_segments_name) {
+        TicketManager() : train_fare_segments(train_fare_segments_name) {
         }
 
         // this will not check the validity of the train group ID
@@ -115,16 +115,16 @@ namespace ticket {
                 prices, sale_date_range, seat_num
             ] = temporary_train_group_info_store.find_first(train_group_id).value();
             for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); ++date) {
-                auto segment_pointer = train_status_station_segments.allocate(prices.size());
+                auto segment_pointer = train_fare_segments.allocate(prices.size());
                 interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
                                                    << ", size=" << segment_pointer.size << ")\n";
                 for (size_t i = 0; i < prices.size(); ++i) {
-                    train_status_station_segments.set(segment_pointer, i, {prices[i], seat_num});
+                    train_fare_segments.set(segment_pointer, i, {prices[i], seat_num});
                     interface::log.as(LogLevel::DEBUG)
                         << "Segment set to: price=" << prices[i] << " seats=" << seat_num << "\n";
                 }
                 const auto train_id = train_id_t{train_group_id, date};
-                train_status_store.insert(train_id, {train_id, segment_pointer});
+                train_fare_store.insert(train_id, {train_id, segment_pointer});
             }
         }
 
@@ -135,11 +135,11 @@ namespace ticket {
         }
 
         auto get_train_status(const train_id_t &train_id) const {
-            return train_status_store.find_first(train_id);
+            return train_fare_store.find_first(train_id);
         }
 
         auto get_train_status_station_segment(const TrainStatusSegmentPointer &seg_ptr, const int cursor) const {
-            return train_status_station_segments.get(seg_ptr, cursor);
+            return train_fare_segments.get(seg_ptr, cursor);
         }
 
         auto get_remaining_seats(const train_id_t &train_id, const int station_serial) const {
@@ -174,7 +174,7 @@ namespace ticket {
             if (from_serial < 0 || to_serial >= train_status->segment_pointer.size || from_serial > to_serial) {
                 throw std::out_of_range("Invalid segment range query");
             }
-            return train_status->join_segments(train_status_station_segments, from_serial, to_serial);
+            return train_status->join_segments(train_fare_segments, from_serial, to_serial);
         }
     };
 } // namespace ticket

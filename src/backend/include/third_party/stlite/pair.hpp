@@ -34,6 +34,13 @@ namespace norb {
     }
   };
 
+  // ostream operator for Pair
+  template <typename first_t_, typename second_t_>
+  inline std::ostream &operator<<(std::ostream &os, const Pair<first_t_, second_t_> &pair) {
+    os << '(' << pair.first << ", " << pair.second << ')';
+    return os;
+  }
+
   template <typename first_t_, typename second_t_>
   constexpr Pair<std::decay_t<first_t_>, std::decay_t<second_t_>>
   make_pair(first_t_ &&first, second_t_ &&second) {

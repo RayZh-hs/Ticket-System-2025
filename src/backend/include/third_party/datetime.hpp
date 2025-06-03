@@ -156,6 +156,21 @@ namespace norb {
                 ++(*this);
                 return temp;
             }
+
+            Date operator-(const int &days) const {
+                Date result = *this;
+                result.day -= days;
+
+                // Normalize the date
+                while (result.day <= 0) {
+                    result.month--;
+                    if (result.month < 1) {
+                        result.month = 12;
+                    }
+                    result.day += impl::DAYS_IN_MONTH_DATA[result.month];
+                }
+                return result;
+            }
         };
 
         struct Time {
@@ -258,6 +273,14 @@ namespace norb {
             dt.total_minutes_since_epoch = total_minutes;
             dt._check_bounds_and_throw();
             return dt;
+        }
+
+        int to_minutes() const {
+            return total_minutes_since_epoch;
+        }
+
+        int to_days() const {
+            return total_minutes_since_epoch / impl::MINUTES_PER_DAY;
         }
 
         int getMonth() const {

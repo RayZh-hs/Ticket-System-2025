@@ -99,4 +99,11 @@ void register_commands(CommandRegistry &cmdr) {
                               {'i'}, // train group name (aka. trainID)
                               {'d'}  // date of departure
                           });
+    cmdr.register_command("query_ticket", TicketSystem::query_ticket_and_print,
+                          {
+                              {'s'}, // from station name
+                              {'t'}, // to station name
+                              {'d'}, // date of departure
+                              {'p', "time"} // sort by "time" or "price"
+                          });
 }

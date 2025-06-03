@@ -37,4 +37,36 @@ namespace ticket {
             return decoded.size();
         }
     };
+
+    // a half-ordered tuple where only the first element is ordered
+    template <typename val_t, typename... Args>
+    struct TrailingTuple {
+    private:
+        val_t primary;
+        std::tuple<Args...> trailing;
+    public:
+        TrailingTuple(const val_t &primary, const Args &...args)
+            : primary(primary), trailing(args...) {}
+
+        template <size_t I>
+        auto get() const {
+            if constexpr (I == 0) {
+                return primary;
+            } else {
+                return std::get<I - 1>(trailing);
+            }
+        }
+
+        auto operator<=>(const TrailingTuple &other) const {
+            return primary <=> other.primary;
+        }
+
+        bool operator==(const TrailingTuple &other) const {
+            return primary == other.primary;
+        }
+
+        bool operator!=(const TrailingTuple &other) const {
+            return !(*this == other);
+        }
+    };
 } // namespace ticket

@@ -359,6 +359,26 @@ namespace ticket {
                 return;
             }
             // find all trains that leave at from at date and arrive in to
+            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, date);
+            // from ticket_manager retrieve the financial information
+            norb::vector<TrainStatusStationSegment> financial_info;
+            for (const auto &train_item : train_query_result) {
+                financial_info.push_back(ticket_manager.get_price_seat_for_section(
+                    train_item.train_id, train_item.from_station, train_item.to_station));
+            }
+            interface::out.as() << train_query_result.size() << '\n';
+            // sort according to the sort_by parameter
+            norb::vector<int> sorted_indices;
+            for (int i = 0; i < train_query_result.size(); ++i) {
+                const auto &train_item = train_query_result[i];
+                const auto &financial_item = financial_info[i];
+                interface::out.as() << train_item.train_id << ' '
+                                    << train_manager.station_name_from_id(train_item.from_station).value() << ' '
+                                    << train_item.from_time << ' ' << "-> "
+                                    << train_manager.station_name_from_id(train_item.to_station).value() << ' '
+                                    << train_item.to_time << ' ' << financial_item.price << ' '
+                                    << financial_item.remaining_seats << '\n';
+            }
         }
     };
 } // namespace ticket

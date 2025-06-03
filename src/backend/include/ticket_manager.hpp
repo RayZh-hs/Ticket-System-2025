@@ -176,37 +176,5 @@ namespace ticket {
             }
             return train_status->join_segments(train_status_station_segments, from_serial, to_serial);
         }
-
-        // struct QueryReturnStructure {
-        //     train_id_t train_id;
-        //     Datetime from_time;
-        //     station_id_t from_station;
-        //     Datetime to_time;
-        //     station_id_t to_station;
-        // };
-
-        // // find all trains that leave at from at date and arrive in to
-        // auto query_ticket(const station_id_t &from_station, const station_id_t &to_station, const Date &date) const {
-        //     norb::vector<QueryReturnStructure> results;
-        //     for (const auto &[train_id, train_status] : train_status_store) {
-        //         if (train_id.second != date) {
-        //             continue; // only consider the train on the specific date
-        //         }
-        //         const auto &seg_ptr = train_status.segment_pointer;
-        //         if (seg_ptr.size < 2) {
-        //             continue; // not enough segments to query
-        //         }
-        //         const auto from_segment = get_train_status_station_segment(seg_ptr, 0);
-        //         const auto to_segment = get_train_status_station_segment(seg_ptr, seg_ptr.size - 1);
-        //         if (from_segment.remaining_seats > 0 && from_segment.price > 0 &&
-        //             from_segment.price < std::numeric_limits<price_t>::max() &&
-        //             from_segment.remaining_seats < std::numeric_limits<int>::max()) {
-        //             results.push_back({train_id,
-        //                                {date, from_segment.departure_time, from_station},
-        //                                {date, to_segment.arrival_time, to_station}});
-        //         }
-        //     }
-        //     return results;
-        // }
     };
 } // namespace ticket

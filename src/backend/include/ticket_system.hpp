@@ -2,6 +2,7 @@
 
 #include "account_manager.hpp"
 #include "settings.hpp"
+#include "sorted_view.hpp"
 #include "ticket_manager.hpp"
 #include "train_manager.hpp"
 #include "utility/wrappers.hpp"
@@ -362,20 +363,31 @@ namespace ticket {
             const auto &train_query_result = train_manager.query_ticket(from_id, to_id, date);
             // from ticket_manager retrieve the financial information
             norb::vector<TrainFareSegment> financial_info;
+            norb::vector<Datetime> duration;
             for (const auto &train_item : train_query_result) {
                 financial_info.push_back(ticket_manager.get_price_seat_for_section(
-                    train_item.train_id, train_item.from_station, train_item.to_station));
+                    train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
+                duration.push_back((train_item.to_time - train_item.from_time));
             }
             interface::out.as() << train_query_result.size() << '\n';
-            // sort according to the sort_by parameter
             norb::vector<int> sorted_indices;
-            for (int i = 0; i < train_query_result.size(); ++i) {
+            const int train_count = train_query_result.size();
+            if (sort_by == "price") {
+                sorted_indices = norb::make_sorted(train_count, [&financial_info](const int &a, const int &b) {
+                    return financial_info[a].price < financial_info[b].price;
+                });
+            } else { // sort by time
+                sorted_indices = norb::make_sorted(
+                    train_count, [&duration](const int &a, const int &b) { return duration[a] < duration[b]; });
+            }
+            // sort according to the sort_by parameter
+            for (const auto &i: sorted_indices) {
                 const auto &train_item = train_query_result[i];
                 const auto &financial_item = financial_info[i];
-                interface::out.as() << train_item.train_id << ' '
-                                    << train_manager.station_name_from_id(train_item.from_station).value() << ' '
+                interface::out.as() << train_manager.get_train_group(train_item.train_id.first)->train_group_name << ' '
+                                    << from << ' '
                                     << train_item.from_time << ' ' << "-> "
-                                    << train_manager.station_name_from_id(train_item.to_station).value() << ' '
+                                    << to << ' '
                                     << train_item.to_time << ' ' << financial_item.price << ' '
                                     << financial_item.remaining_seats << '\n';
             }

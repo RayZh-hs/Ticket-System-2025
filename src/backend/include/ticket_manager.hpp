@@ -21,7 +21,7 @@ namespace ticket {
         using station_id_t = hash_t;
         using price_t = int;
 
-        price_t price; // the price from this station to the next
+        price_t price = 0; // the price from this station to the next
         int remaining_seats = 0;
 
         TrainFareSegment operator&(const TrainFareSegment &other) const {
@@ -35,6 +35,7 @@ namespace ticket {
         train_id_t train_id;
         SegmentList::SegmentPointer segment_pointer;
 
+        // both sides are inclusive
         TrainFareSegment join_segments(const SegmentList &seg_ref, const int from, const int to) const {
             if (from < 0 || to >= segment_pointer.size || from > to) {
                 throw std::runtime_error("Invalid segment range query");
@@ -171,10 +172,10 @@ namespace ticket {
             if (not train_status.has_value()) {
                 throw std::runtime_error("Train status not found.");
             }
-            if (from_serial < 0 || to_serial >= train_status->segment_pointer.size || from_serial > to_serial) {
+            if (from_serial < 0 || to_serial - 1 >= train_status->segment_pointer.size || from_serial > to_serial) {
                 throw std::out_of_range("Invalid segment range query");
             }
-            return train_status->join_segments(train_fare_segments, from_serial, to_serial);
+            return train_status->join_segments(train_fare_segments, from_serial, to_serial - 1);
         }
     };
 } // namespace ticket

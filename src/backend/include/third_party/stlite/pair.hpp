@@ -3,6 +3,7 @@
 #include <compare>
 #include <type_traits>
 #include <utility>
+#include "ntraits.hpp"
 
 namespace norb {
   /**
@@ -22,8 +23,15 @@ namespace norb {
     Pair(Pair &&other) = default;
     Pair &operator=(const Pair &other) = default;
 
-    auto operator<=>(const Pair &other) const = default;
-    bool operator==(const Pair &other) const = default;
+    auto operator<=>(const Pair &other) const requires IsComparable<second_t_> = default;
+    bool operator==(const Pair &other) const requires IsComparable<second_t_> = default;
+
+    auto operator<=>(const Pair &other) const requires (not IsComparable<second_t_>) {
+      return first <=> other.first;
+    }
+    bool operator==(const Pair &other) const requires (not IsComparable<second_t_>) {
+      return first == other.first;
+    }
   };
 
   template <typename first_t_, typename second_t_>

@@ -628,10 +628,18 @@ namespace norb {
             auto [leaf_node_handle, within_leaf_node_pos] = get_insertion_pos(handle, norb::make_pair(key, val));
 
             const auto leaf_node_const_href = leaf_node_handle.template const_ref<LeafNode>();
-            if (within_leaf_node_pos >= leaf_node_const_href->size ||
-                leaf_node_const_href->data[within_leaf_node_pos].first != key ||
-                leaf_node_const_href->data[within_leaf_node_pos].second != val)
-                return false; // Element not found
+            if constexpr (HasNeq<val_t>) {
+                if (within_leaf_node_pos >= leaf_node_const_href->size ||
+                    leaf_node_const_href->data[within_leaf_node_pos].first != key ||
+                    leaf_node_const_href->data[within_leaf_node_pos].second != val)
+                    return false; // Element not found
+            }
+            else {
+                if (within_leaf_node_pos >= leaf_node_const_href->size ||
+                    leaf_node_const_href->data[within_leaf_node_pos].first != key)
+                    return false; // Element not found
+
+            }
 
             tree_size.val--;
             auto leaf_node_href = leaf_node_handle.template ref<LeafNode>();

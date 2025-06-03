@@ -101,4 +101,18 @@ namespace norb {
 
     template <typename T> constexpr bool is_optional_v = is_optional<std::decay_t<T>>::value;
 
+    template <typename T>
+    concept IsComparable = requires(const T &a, const T &b) {
+        { a < b } -> std::convertible_to<bool>;
+        { a > b } -> std::convertible_to<bool>;
+        { a <= b } -> std::convertible_to<bool>;
+        { a >= b } -> std::convertible_to<bool>;
+        { a == b } -> std::convertible_to<bool>;
+        { a != b } -> std::convertible_to<bool>;
+    } or std::three_way_comparable_with<T, T>;
+
+    template <typename T>
+    concept HasNeq = requires(const T &a, const T &b) {
+        { a != b } -> std::convertible_to<bool>;
+    };
 } // namespace norb

@@ -232,13 +232,13 @@ namespace ticket {
                 train_manager.add_train_group(train_group_name, segments, seat_num, decoded_sale_date[0],
                                               decoded_sale_date[1], type);
                 global_interface::log.as(LogLevel::DEBUG)
-                    << "Train group " << train_group_name << " has been registered in the train manager" << '\n';
+                    << "Train group " << train_group_name << " has been added into the train manager" << '\n';
                 // register into the ticket manager
                 ticket_manager.add_train_group(
                     TrainManager::train_group_id_from_name(train_group_name), decoded_prices,
                     norb::Range<norb::Datetime::Date>(decoded_sale_date[0], decoded_sale_date[1]), seat_num);
                 global_interface::log.as(LogLevel::DEBUG)
-                    << "Train group " << train_group_name << " has been registered in the ticket manager" << '\n';
+                    << "Train group " << train_group_name << " has been added into the ticket manager" << '\n';
                 return 0;
             } catch (std::runtime_error &e) {
                 global_interface::log.as(LogLevel::WARNING) << "Add train failed: " << e.what() << '\n';
@@ -265,12 +265,14 @@ namespace ticket {
 
         static int release_train(const std::string &train_group_name) {
             auto &train_manager = get_instance().train_manager_;
+            auto &ticket_manager = get_instance().ticket_manager_;
 
             try {
                 const auto train_group_id = TrainManager::train_group_id_from_name(train_group_name);
                 global_interface::log.as(LogLevel::DEBUG)
                     << "Releasing train group " << train_group_name << " with ID #" << train_group_id << '\n';
                 train_manager.release_train_group(train_group_id);
+                ticket_manager.release_train_group(train_group_id);
                 return 0;
             } catch (std::runtime_error &e) {
                 global_interface::log.as(LogLevel::WARNING) << "Release train failed: " << e.what() << '\n';
@@ -300,20 +302,27 @@ namespace ticket {
             interface::out.as() << train_group_info->train_group_name << ' ' << train_group_info->train_type << '\n';
 
             const auto train_id = train_id_t{train_group_id, date};
-            const auto train_status = ticket_manager.get_train_status(train_id);
-            assert(train_status.has_value() && "Train status should exist if train group is available on the date");
             const auto &train_group_segment_pointer = train_group_info->segment_pointer;
-            const auto &train_segment_pointer = train_status->segment_pointer;
             int accumulated_price = 0;
+            const auto has_released = train_manager.has_released_train_group(train_group_id);
+            interface::log.as(LogLevel::INFO) << "Train group " << train_group_name << " has "
+                                              << (has_released ? "been released" : "not been released") << '\n';
+            norb::vector<int> seats_info;
+            if (has_released) {
+                seats_info = ticket_manager.get_remaining_seats_for_train(train_id);
+                interface::log.as(LogLevel::DEBUG)
+                    << "Queried remaining seats for train " << train_id << ": " << seats_info << '\n';
+            }
             for (int i = 0; i < train_group_segment_pointer.size; ++i) {
                 const auto &train_group_segment = train_manager.get_train_group_segment(train_group_segment_pointer, i);
-                const auto &ticket_segment = ticket_manager.get_train_status_station_segment(train_segment_pointer, std::min(i, train_group_segment_pointer.size - 2));
+                // const auto &ticket_segment = ticket_manager.get_train_status_station_segment(
+                //     train_segment_pointer, std::min(i, train_group_segment_pointer.size - 2));
 
                 // print on the same line
                 interface::out.as(nullptr)
                     << train_manager.station_name_from_id(train_group_segment.station_id).value() << ' ';
                 // arrival time
-                    if (i == 0) {
+                if (i == 0) {
                     interface::out.as(nullptr) << datetime_placeholder << ' ';
                 } else {
                     interface::out.as(nullptr) << (Datetime(date) + train_group_segment.arrival_time) << ' ';
@@ -328,13 +337,28 @@ namespace ticket {
                 // accumulated price + tickets left
                 interface::out.as(nullptr) << accumulated_price << ' ';
                 if (i < train_group_segment_pointer.size - 1) {
-                    interface::out.as(nullptr) << ticket_segment.remaining_seats << '\n';
+                    interface::out.as(nullptr) << (has_released ? seats_info[i] : train_group_info->seat_num) << '\n';
                     accumulated_price += train_group_segment.price;
-                }
-                else {
+                } else {
                     interface::out.as(nullptr) << 'x' << '\n';
                 }
             }
+        }
+
+        static void query_ticket_and_print(const std::string &from, const std::string &to, const Date &date,
+                                           const std::string &sort_by) {
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &train_manager = get_instance().train_manager_;
+
+            const auto from_id = TrainManager::station_id_from_name(from);
+            const auto to_id = TrainManager::station_id_from_name(to);
+            if (from_id == to_id) {
+                interface::log.as(LogLevel::WARNING)
+                    << "Query ticket failed: from and to stations are the same" << '\n';
+                interface::out.as() << "-1\n";
+                return;
+            }
+            // find all trains that leave at from at date and arrive in to
         }
     };
 } // namespace ticket

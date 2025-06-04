@@ -436,7 +436,7 @@ namespace ticket {
                 return {};
             }
             // find all trains that leave at from at date and arrive in to
-            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, Datetime(date));
+            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, Datetime(date), std::nullopt, true);
             // from ticket_manager retrieve the financial information
             norb::vector<TrainFareSegment> financial_info;
             norb::vector<Datetime> duration;
@@ -629,7 +629,7 @@ namespace ticket {
                                                    .to_time = train_manager.get_arrival_datetime(train_group_info.value(), to_station_serial.value(), train_id->second),
                                                    .purchase_timestamp = interface::get_timestamp(),
                                                    .count = count,
-                                                   .total_price = price * count,
+                                                   .price = price,
                                                    .status = Order::Status::Pending});
                     return "queue";
                 }
@@ -644,7 +644,7 @@ namespace ticket {
                                                .to_time = train_manager.get_arrival_datetime(train_group_info.value(), to_station_serial.value(), train_id->second),
                                                .purchase_timestamp = interface::get_timestamp(),
                                                .count = count,
-                                               .total_price = price * count,
+                                               .price = price,
                                                .status = Order::Status::Success});
                 return price * count; // Return the total price of the order
             }
@@ -665,12 +665,15 @@ namespace ticket {
             const auto orders = ticket_manager.get_orders_by_account(account_id);
             if (orders.empty()) {
                 interface::log.as(LogLevel::INFO) << "No orders found for user " << username << '\n';
-                interface::out.as() << "-1\n"; // No orders found
+                interface::out.as() << "0\n"; // No orders found
                 return;
             }
             interface::out.as() << orders.size() << '\n';
             // [<STATUS>] <trainID> <FROM> <LEAVING_TIME> -> <TO> <ARRIVING_TIME> <PRICE> <NUM>
-            for (const auto &order : orders) {
+            // the newer an order is placed, the latter it comes in the vector
+            // therefore, we should output them in reversed order
+            for (int i = static_cast<int>(orders.size()) - 1; i >= 0; --i) {
+                const auto &order = orders[i];
                 const auto &train_group_info = train_manager.get_train_group(order.train_id.first);
                 const auto &from_station_name = train_manager.station_name_from_id(
                     train_manager.get_train_group_segment(train_group_info->segment_pointer, order.from_station_serial).station_id
@@ -684,7 +687,7 @@ namespace ticket {
                                             << order.from_time << " -> "
                                             << to_station_name.value() << ' '
                                             << order.to_time << ' '
-                                            << order.total_price << ' '
+                                            << order.price << ' '
                                             << order.count << '\n';
             }
         }

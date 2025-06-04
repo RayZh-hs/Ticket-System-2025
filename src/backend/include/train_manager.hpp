@@ -250,7 +250,7 @@ namespace ticket {
         // the first train in train_group_info that departs after the given datetime at the station
         Date deduce_departure_time_for_first_after(const TrainGroup &train_group_info, const int &station_serial,
                                                    const Datetime &after_datetime_at_station) const {
-            const TrainGroupSegment &from_station_segment = 
+            const TrainGroupSegment &from_station_segment =
                 train_group_segments.get(train_group_info.segment_pointer, station_serial);
             const auto critical_datetime = after_datetime_at_station - from_station_segment.departure_time.to_minutes();
             // return ceil(critical_datetime)
@@ -328,7 +328,8 @@ namespace ticket {
 
         norb::vector<TrainRange> query_ticket(const station_id_t &from_station_id, const station_id_t &to_station_id,
                                               const Datetime &datetime,
-                                              const std::optional<train_group_id_t> &except = std::nullopt) const {
+                                              const std::optional<train_group_id_t> &except = std::nullopt,
+                                              const bool use_loose_date = false) const {
             norb::vector<TrainRange> results;
             // Step 1: Get the train groups from the lookup table
             const auto all_candidate_train_groups =
@@ -338,23 +339,33 @@ namespace ticket {
                 interface::log.as(LogLevel::DEBUG) << "Checking train group " << candidate_train_group.train_group_id
                                                    << " in range: [" << candidate_train_group.station_from_serial
                                                    << ", " << candidate_train_group.station_to_serial << "]\n";
-                // Check if the train group is available on the given datetime
-                const auto arrival_datetime_range = get_departure_datetime_range(
-                    candidate_train_group.train_group_id, candidate_train_group.station_from_serial);
                 if (except.has_value() && except.value() == candidate_train_group.train_group_id) {
                     interface::log.as(LogLevel::DEBUG) << "Skipped because train group is in the except list.\n";
                     continue; // Skip this train group
                 }
-                if (not arrival_datetime_range.contains(datetime)) {
-                    interface::log.as(LogLevel::DEBUG)
-                        << "Skipped because train group is not available on the given date.\n";
-                    continue; // Not available on this date
+                // todo check fix
+                if (use_loose_date) {
+                    const auto arrival_date_range = get_departure_date_range(candidate_train_group.train_group_id,
+                                                                             candidate_train_group.station_from_serial);
+                    if (not arrival_date_range.contains(datetime.getDate())) {
+                        interface::log.as(LogLevel::DEBUG)
+                            << "Skipped because train group is not available on the given date.\n";
+                    }
+                } else {
+                    // Check if the train group is available on the given datetime
+                    const auto arrival_datetime_range = get_departure_datetime_range(
+                        candidate_train_group.train_group_id, candidate_train_group.station_from_serial);
+                    if (not arrival_datetime_range.contains(datetime)) {
+                        interface::log.as(LogLevel::DEBUG)
+                            << "Skipped because train group is not available on the given datetime.\n";
+                        continue; // Not available on this datetime
+                    }
                 }
                 const auto &train_group_info =
                     train_group_store.find_first(candidate_train_group.train_group_id).value();
-                // todo fix this
-                const auto fist_departure_date =
-                    deduce_departure_time_for_first_after(train_group_info, candidate_train_group.station_from_serial, datetime);
+                // done fix this (fixed)
+                const auto fist_departure_date = deduce_departure_time_for_first_after(
+                    train_group_info, candidate_train_group.station_from_serial, datetime);
                 const auto &train_id = train_id_t(candidate_train_group.train_group_id, fist_departure_date);
                 interface::log.as(LogLevel::DEBUG) << "Registering train ID: " << train_id << '\n';
 

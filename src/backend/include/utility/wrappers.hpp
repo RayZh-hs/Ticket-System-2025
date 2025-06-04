@@ -16,7 +16,8 @@ namespace ticket {
 
       public:
         ConcentratedString(const std::string &s) {
-            if (s == placeholder) return;
+            if (s == placeholder)
+                return;
             std::string mem;
             for (int i = 0; i < s.length(); i++) {
                 if (s[i] == delimiter) {
@@ -39,17 +40,22 @@ namespace ticket {
     };
 
     // a half-ordered tuple where only the first element is ordered
-    template <typename val_t, typename... Args>
-    struct TrailingTuple {
-    private:
+    template <typename val_t, typename... Args> struct TrailingTuple {
+      private:
         val_t primary;
         std::tuple<Args...> trailing;
-    public:
-        TrailingTuple(const val_t &primary, const Args &...args)
-            : primary(primary), trailing(args...) {}
 
-        template <size_t I>
-        auto get() const {
+      public:
+        // Default constructor (only enabled if all types are default-constructible)
+        TrailingTuple()
+            requires std::is_default_constructible_v<val_t> && (std::is_default_constructible_v<Args> && ...)
+            : primary(), trailing() {
+        }
+
+        TrailingTuple(const val_t &primary, const Args &...args) : primary(primary), trailing(args...) {
+        }
+
+        template <size_t I> auto get() const {
             if constexpr (I == 0) {
                 return primary;
             } else {
@@ -67,6 +73,11 @@ namespace ticket {
 
         bool operator!=(const TrailingTuple &other) const {
             return !(*this == other);
+        }
+
+        using id_t = val_t;
+        id_t id() const {
+            return primary;
         }
     };
 } // namespace ticket

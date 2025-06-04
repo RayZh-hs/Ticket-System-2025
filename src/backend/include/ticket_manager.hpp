@@ -73,18 +73,18 @@ namespace ticket {
         Datetime to_time;               // the datetime of arrival
         timestamp_t purchase_timestamp; // the datetime of first purchase
         int count = 0;
-        price_t total_price;
+        price_t price;
         Status status = Status::Success;
 
         using order_id_t = norb::Pair<account_id_t, timestamp_t>;
-        order_id_t id() const {
+        [[nodiscard]] order_id_t id() const {
             return {account, purchase_timestamp};
         }
         static order_id_t id_from_account_and_timestamp(const account_id_t &account, const timestamp_t &timestamp) {
             return {account, timestamp};
         }
 
-        std::string status_string() const {
+        [[nodiscard]] std::string status_string() const {
             switch (status) {
             case Success:
                 return "success";
@@ -117,11 +117,55 @@ namespace ticket {
         norb::FiledSegmentList<TrainFareSegment> train_fare_segments;
 
         struct TemporalTrainGroupInfo {
-            norb::vector<price_t> prices;
-            norb::Range<Date> sale_date_range;
-            int seat_num = 0;
-        };
-        norb::BPlusTree<train_group_id_t, TemporalTrainGroupInfo, norb::MANUAL> temporary_train_group_info_store;
+            // norb::vector<price_t> prices;
+            // norb::Range<Date> sale_date_range;
+            // int seat_num = 0;
+            norb::BPlusTree<train_group_id_t, TrailingTuple<int, price_t>> prices_for_segments;
+            norb::BPlusTree<train_group_id_t, norb::Range<Date>, norb::MANUAL> sale_date_range_store;
+            norb::BPlusTree<train_group_id_t, int, norb::MANUAL> seat_num_store;
+
+            void add(const train_group_id_t &train_group_id, const norb::vector<price_t> &prices,
+                     const norb::Range<Date> &sale_date_range, const int &seat_num) {
+                for (int i = 0; i < prices.size(); ++i) {
+                    prices_for_segments.insert(train_group_id, {i, prices[i]});
+                }
+                sale_date_range_store.insert(train_group_id, sale_date_range);
+                seat_num_store.insert(train_group_id, seat_num);
+            }
+
+            norb::vector<price_t> get_prices(const train_group_id_t &train_group_id) const {
+                auto prices = prices_for_segments.find_all(train_group_id);
+                norb::vector<price_t> result;
+                for (const auto &price : prices) {
+                    result.push_back(price.get<1>());
+                }
+                return result;
+            }
+
+            norb::Range<Date> get_sale_date_range(const train_group_id_t &train_group_id) const {
+                return sale_date_range_store.find_first(train_group_id).value();
+            }
+
+            int get_seat_num(const train_group_id_t &train_group_id) const {
+                return seat_num_store.find_first(train_group_id).value();
+            }
+
+            bool has_train_group(const train_group_id_t &train_group_id) const {
+                return seat_num_store.count(train_group_id) > 0;
+            }
+
+            void remove_all(const train_group_id_t &train_group_id) {
+                prices_for_segments.remove_all(train_group_id);
+                sale_date_range_store.remove_all(train_group_id);
+                seat_num_store.remove_all(train_group_id);
+            }
+
+            void clear() {
+                prices_for_segments.clear();
+                sale_date_range_store.clear();
+                seat_num_store.clear();
+            }
+        } temporary_train_group_info_store;
 
       public:
         TicketManager() : train_fare_segments(train_fare_segments_name) {
@@ -130,14 +174,18 @@ namespace ticket {
         // this will not check the validity of the train group ID
         void add_train_group(const train_group_id_t &train_group_id, const norb::vector<price_t> &prices,
                              const norb::Range<Date> &sale_date_range, const int &seat_num) {
-            assert(temporary_train_group_info_store.count(train_group_id) == 0);
-            temporary_train_group_info_store.insert(train_group_id, {prices, sale_date_range, seat_num});
+            assert(not temporary_train_group_info_store.has_train_group(train_group_id) &&
+                   "Train group already exists in temporary store");
+            temporary_train_group_info_store.add(train_group_id, prices, sale_date_range, seat_num);
         }
 
         // this will not check the validity of the train group ID, or that it has not been released
         void release_train_group(const train_group_id_t &train_group_id) {
-            const auto [prices, sale_date_range, seat_num] =
-                temporary_train_group_info_store.find_first(train_group_id).value();
+            // const auto [prices, sale_date_range, seat_num] =
+            //     temporary_train_group_info_store.find_first(train_group_id).value();
+            const auto prices = temporary_train_group_info_store.get_prices(train_group_id);
+            const auto sale_date_range = temporary_train_group_info_store.get_sale_date_range(train_group_id);
+            const auto seat_num = temporary_train_group_info_store.get_seat_num(train_group_id);
             for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); ++date) {
                 auto segment_pointer = train_fare_segments.allocate(prices.size());
                 interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
@@ -208,7 +256,7 @@ namespace ticket {
                 throw std::runtime_error("Order already exists.");
             }
             purchase_history_store.insert(order.id(), order);
-            if (order.Pending) {
+            if (order.status == Order::Pending) {
                 pending_order_store.insert({order.train_id, order.purchase_timestamp}, order.id());
             } else {
                 // update the number of remaining seats
@@ -253,20 +301,17 @@ namespace ticket {
             }
             // look for pending orders that can now be verified
             auto pending_orders = pending_order_store.find_all_in_range(
-                norb::unpack_range(order.train_id, norb::Range<Order::timestamp_t>::full_range())
-            );
+                norb::unpack_range(order.train_id, norb::Range<Order::timestamp_t>::full_range()));
             for (const auto &pending_order_id : pending_orders) {
                 auto pending_order = purchase_history_store.find_first(pending_order_id).value();
-                assert(pending_order.status == Order::Status::Pending &&
-                       "Pending order should be in pending status");
+                assert(pending_order.status == Order::Status::Pending && "Pending order should be in pending status");
                 const auto [_, remaining_seats] = get_price_seat_for_section(
                     pending_order.train_id, pending_order.from_station_serial, pending_order.to_station_serial);
                 if (remaining_seats >= pending_order.count) {
                     // this order can be satisfied
                     assert(purchase_history_store.remove(pending_order_id, pending_order));
-                    assert(pending_order_store.remove(
-                        {pending_order.train_id, pending_order.purchase_timestamp}, pending_order_id
-                    ));
+                    assert(pending_order_store.remove({pending_order.train_id, pending_order.purchase_timestamp},
+                                                      pending_order_id));
                     pending_order.status = Order::Status::Success;
                     purchase_history_store.insert(pending_order_id, pending_order);
                     // update the number of remaining seats

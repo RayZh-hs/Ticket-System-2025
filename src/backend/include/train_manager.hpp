@@ -86,6 +86,7 @@ namespace ticket {
         SegmentList train_group_segments;
 
       public:
+        norb::vector<station_id_t> station_id_vector;
         TrainManager() : train_group_segments(train_group_segments_name) {
         }
 
@@ -113,6 +114,7 @@ namespace ticket {
             const auto station_id = station_id_from_name(static_cast<std::string>(station_name));
             if (not station_name_store.count(station_id)) {
                 station_name_store.insert(station_id, station_name);
+                station_id_vector.push_back(station_id);
             }
         }
 
@@ -203,6 +205,18 @@ namespace ticket {
                                train_group_info.sale_date_range.get_to() + segment.departure_time.to_days());
         }
 
+        auto get_departure_datetime_range(const train_group_id_t &train_group_id, const int station_serial) const {
+            const auto train_group_info = train_group_store.find_first(train_group_id).value();
+            const auto seg_ptr = train_group_info.segment_pointer;
+            if (station_serial < 0 || station_serial >= seg_ptr.size) {
+                throw std::out_of_range("Station serial out of range.");
+            }
+            const auto &segment = train_group_segments.get(seg_ptr, station_serial);
+            return norb::Range(
+                Datetime(train_group_info.sale_date_range.get_from()) + segment.departure_time.to_minutes(),
+                Datetime(train_group_info.sale_date_range.get_to()) + segment.departure_time.to_minutes());
+        }
+
         Date deduce_departure_date_from(const train_group_id_t &train_group_id, const int &station_serial,
                                         const Date &date_at_station) const {
             const auto &train_group_info = train_group_store.find_first(train_group_id).value();
@@ -216,6 +230,13 @@ namespace ticket {
             const TrainGroupSegment &from_station_segment =
                 train_group_segments.get(group_train_info.segment_pointer, station_serial);
             return date_at_station - from_station_segment.arrival_time.to_days();
+        }
+
+        Date deduce_departure_date_from(const TrainGroup &group_train_info, const int &station_serial,
+                                        const Datetime &datetime_at_station) const {
+            const TrainGroupSegment &from_station_segment =
+                train_group_segments.get(group_train_info.segment_pointer, station_serial);
+            return (datetime_at_station - from_station_segment.arrival_time.to_minutes()).getDate();
         }
 
         // Datetime get_departure_datetime(const TrainGroup &train_group_info, const int &station_serial,
@@ -241,20 +262,27 @@ namespace ticket {
         };
 
         norb::vector<TrainRange> query_ticket(const station_id_t &from_station_id, const station_id_t &to_station_id,
-                                              const Date &date) const {
+                                              const Datetime &datetime,
+                                              const std::optional<train_group_id_t> &except = std::nullopt) const {
             norb::vector<TrainRange> results;
             // Step 1: Get the train groups from the lookup table
             const auto all_candidate_train_groups =
                 station_train_group_lookup_store.find_all({from_station_id, to_station_id});
             // Step 2: Iterate through all_candidate_train_groups to verify them
             for (const auto &candidate_train_group : all_candidate_train_groups) {
-                interface::log.as(LogLevel::DEBUG)
-                    << "Checking train group " << candidate_train_group.train_group_id << " in range: ["
-                    << candidate_train_group.station_from_serial << ", " << candidate_train_group.station_to_serial << "]\n";
-                // Check if the train group is available on the given date
-                const auto arrival_date_range =
-                    get_departure_date_range(candidate_train_group.train_group_id, candidate_train_group.station_from_serial);
-                if (not arrival_date_range.contains(date)) {
+                interface::log.as(LogLevel::DEBUG) << "Checking train group " << candidate_train_group.train_group_id
+                                                   << " in range: [" << candidate_train_group.station_from_serial
+                                                   << ", " << candidate_train_group.station_to_serial << "]\n";
+                // Check if the train group is available on the given datetime
+                const auto arrival_datetime_range = get_departure_datetime_range(
+                    candidate_train_group.train_group_id, candidate_train_group.station_from_serial);
+                if (except.has_value() &&
+                    except.value() == candidate_train_group.train_group_id) {
+                    interface::log.as(LogLevel::DEBUG)
+                        << "Skipped because train group is in the except list.\n";
+                    continue; // Skip this train group
+                }
+                if (not arrival_datetime_range.contains(datetime)) {
                     interface::log.as(LogLevel::DEBUG)
                         << "Skipped because train group is not available on the given date.\n";
                     continue; // Not available on this date
@@ -262,22 +290,21 @@ namespace ticket {
                 const auto &train_group_info =
                     train_group_store.find_first(candidate_train_group.train_group_id).value();
                 const auto fist_departure_date =
-                    deduce_departure_date_from(train_group_info, candidate_train_group.station_from_serial, date);
+                    deduce_departure_date_from(train_group_info, candidate_train_group.station_from_serial, datetime);
                 const auto &train_id = train_id_t(candidate_train_group.train_group_id, fist_departure_date);
                 interface::log.as(LogLevel::DEBUG) << "Registering train ID: " << train_id << '\n';
 
-                const auto from_station_info =
-                    get_train_group_segment(train_group_info.segment_pointer, candidate_train_group.station_from_serial);
+                const auto from_station_info = get_train_group_segment(train_group_info.segment_pointer,
+                                                                       candidate_train_group.station_from_serial);
                 const auto to_station_info =
                     get_train_group_segment(train_group_info.segment_pointer, candidate_train_group.station_to_serial);
-                results.emplace_back(
-                    norb::Pair{candidate_train_group.train_group_id, fist_departure_date},
-                    Datetime(fist_departure_date) + from_station_info.departure_time, candidate_train_group.station_from_serial,
-                    Datetime(fist_departure_date) + to_station_info.arrival_time, candidate_train_group.station_to_serial);
+                results.emplace_back(norb::Pair{candidate_train_group.train_group_id, fist_departure_date},
+                                     Datetime(fist_departure_date) + from_station_info.departure_time,
+                                     candidate_train_group.station_from_serial,
+                                     Datetime(fist_departure_date) + to_station_info.arrival_time,
+                                     candidate_train_group.station_to_serial);
             }
             return results;
         }
-
-
     };
 } // namespace ticket

@@ -27,6 +27,7 @@ namespace ticket {
         using account_id_t = Account::id_t;
         using Date = norb::Datetime::Date;
         using interface = global_interface;
+        using station_id_t = TrainManager::station_id_t;
 
       public:
         static TicketSystem &get_instance() {
@@ -346,21 +347,54 @@ namespace ticket {
             }
         }
 
-        static void query_ticket_and_print(const std::string &from, const std::string &to, const Date &date,
-                                           const std::string &sort_by) {
+        struct TrainRideInfo {
+            using price_t = TicketManager::price_t;
+            using TrainRange = TrainManager::TrainRange;
+            train_id_t train_id;
+            station_id_t from_station_id;
+            station_id_t to_station_id;
+            Datetime from_time;
+            Datetime to_time;
+            price_t price;
+            int remaining_seats;
+
+            TrainRideInfo(const train_id_t &train_id, const station_id_t &from_station_id,
+                          const station_id_t &to_station_id, const Datetime &from_time, const Datetime &to_time,
+                          const price_t &price, const int &remaining_seats)
+                : train_id(train_id), from_station_id(from_station_id), to_station_id(to_station_id),
+                  from_time(from_time), to_time(to_time), price(price), remaining_seats(remaining_seats) {
+            }
+
+            TrainRideInfo(const TrainRange &tr, TrainManager &train_man, TicketManager &ticket_man) {
+                train_id = tr.train_id;
+                const auto train_group_info = train_man.get_train_group(tr.train_id.first);
+                const auto from_train_group_seg =
+                    train_man.get_train_group_segment(train_group_info->segment_pointer, tr.from_station_serial);
+                const auto to_train_group_seg =
+                    train_man.get_train_group_segment(train_group_info->segment_pointer, tr.to_station_serial);
+                from_station_id = from_train_group_seg.station_id;
+                to_station_id = to_train_group_seg.station_id;
+                from_time = tr.from_time;
+                to_time = tr.to_time;
+                const auto train_fare_segment =
+                    ticket_man.get_price_seat_for_section(tr.train_id, tr.from_station_serial, tr.to_station_serial);
+                price = train_fare_segment.price;
+                remaining_seats = train_fare_segment.remaining_seats;
+            }
+        };
+
+        static norb::vector<TrainRideInfo> query_ticket(const station_id_t &from_id, const station_id_t &to_id,
+                                                        const Date &date, const std::string &sort_by) {
             auto &ticket_manager = get_instance().ticket_manager_;
             auto &train_manager = get_instance().train_manager_;
 
-            const auto from_id = TrainManager::station_id_from_name(from);
-            const auto to_id = TrainManager::station_id_from_name(to);
             if (from_id == to_id) {
                 interface::log.as(LogLevel::WARNING)
                     << "Query ticket failed: from and to stations are the same" << '\n';
-                interface::out.as() << "-1\n";
-                return;
+                return {};
             }
             // find all trains that leave at from at date and arrive in to
-            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, date);
+            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, Datetime(date));
             // from ticket_manager retrieve the financial information
             norb::vector<TrainFareSegment> financial_info;
             norb::vector<Datetime> duration;
@@ -369,7 +403,6 @@ namespace ticket {
                     train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
                 duration.push_back((train_item.to_time - train_item.from_time));
             }
-            interface::out.as() << train_query_result.size() << '\n';
             norb::vector<int> sorted_indices;
             const int train_count = train_query_result.size();
             if (sort_by == "price") {
@@ -380,16 +413,156 @@ namespace ticket {
                 sorted_indices = norb::make_sorted(
                     train_count, [&duration](const int &a, const int &b) { return duration[a] < duration[b]; });
             }
+            norb::vector<TrainRideInfo> ret;
             // sort according to the sort_by parameter
-            for (const auto &i: sorted_indices) {
+            for (const auto &i : sorted_indices) {
                 const auto &train_item = train_query_result[i];
                 const auto &financial_item = financial_info[i];
-                interface::out.as() << train_manager.get_train_group(train_item.train_id.first)->train_group_name << ' '
-                                    << from << ' '
-                                    << train_item.from_time << ' ' << "-> "
-                                    << to << ' '
-                                    << train_item.to_time << ' ' << financial_item.price << ' '
-                                    << financial_item.remaining_seats << '\n';
+                ret.emplace_back(train_item.train_id, from_id, to_id, train_item.from_time, train_item.to_time,
+                                 financial_item.price, financial_item.remaining_seats);
+            }
+            return ret;
+        }
+
+        static void query_ticket_and_print(const std::string &from, const std::string &to, const Date &date,
+                                           const std::string &sort_by) {
+            auto &train_manager = get_instance().train_manager_;
+
+            const auto from_id = TrainManager::station_id_from_name(from);
+            const auto to_id = TrainManager::station_id_from_name(to);
+
+            const auto query_ans = query_ticket(from_id, to_id, date, sort_by);
+            interface::out.as() << query_ans.size() << '\n';
+            for (const auto &item : query_ans) {
+                const auto train_name = train_manager.get_train_group(item.train_id.first)->train_group_name;
+                interface::out.as(nullptr)
+                    << train_name << ' ' << from << ' ' << item.from_time << ' ' << "-> " << to << ' ' << item.to_time
+                    << ' ' << item.price << ' ' << item.remaining_seats << '\n';
+            }
+        }
+
+        static std::optional<TrainRideInfo>
+        find_best_between(const station_id_t &from_id, const station_id_t &to_id, const Datetime &datetime,
+                          const std::string &sort_by, const std::optional<train_group_id_t> &except = std::nullopt) {
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &train_manager = get_instance().train_manager_;
+
+            if (from_id == to_id) {
+                return std::nullopt;
+            }
+            // find all trains that leave at from at date and arrive in to
+            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, datetime, except);
+            if (train_query_result.empty())
+                return std::nullopt;
+            // from ticket_manager retrieve the financial information
+            norb::vector<TrainFareSegment> financial_info;
+            norb::vector<Datetime> duration;
+            for (const auto &train_item : train_query_result) {
+                financial_info.push_back(ticket_manager.get_price_seat_for_section(
+                    train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
+                duration.push_back((train_item.to_time - train_item.from_time));
+            }
+            int best_cursor = -1;
+            const int train_count = train_query_result.size();
+            if (sort_by == "price") {
+                best_cursor = norb::make_supreme(train_count, [&financial_info](const int &a, const int &b) {
+                    return financial_info[a].price < financial_info[b].price;
+                });
+            } else { // sort by time
+                best_cursor = norb::make_supreme(
+                    train_count, [&duration](const int &a, const int &b) { return duration[a] < duration[b]; });
+            }
+            return best_cursor == -1
+                       ? std::nullopt
+                       : std::make_optional<TrainRideInfo>(
+                             {train_query_result[best_cursor].train_id, from_id, to_id,
+                              train_query_result[best_cursor].from_time, train_query_result[best_cursor].to_time,
+                              financial_info[best_cursor].price, financial_info[best_cursor].remaining_seats});
+        }
+
+        static void query_transfer_and_print(const std::string &from, const std::string &to, const Date &date,
+                                             const std::string &sort_by) {
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &train_manager = get_instance().train_manager_;
+
+            const auto from_id = TrainManager::station_id_from_name(from);
+            const auto to_id = TrainManager::station_id_from_name(to);
+            if (from_id == to_id) {
+                interface::log.as(LogLevel::WARNING)
+                    << "Query transfer failed: from and to stations are the same" << '\n';
+                interface::out.as() << "-1\n";
+                return;
+            }
+            // iterate over the cities for mid and calculate the best trade between (from -> mid) and (mid -> to)
+            using obj_t = std::pair<TrainRideInfo, TrainRideInfo>;
+            norb::impl::cmp_func_t<obj_t> cmp_func;
+            if (sort_by == "time") {
+                cmp_func = [&train_manager](const obj_t &a, const obj_t &b) {
+                    if (a.second.to_time - a.first.from_time != b.second.to_time - b.first.from_time) {
+                        return a.second.to_time - a.first.from_time < b.second.to_time - b.first.from_time;
+                    }
+                    if (a.first.price + a.second.price != b.first.price + b.second.price) {
+                        return a.first.price + a.second.price < b.first.price + b.second.price;
+                    }
+                    if (a.first.train_id != b.first.train_id) {
+                        return train_manager.get_train_group(a.first.train_id.first)->train_group_name <
+                               train_manager.get_train_group(b.first.train_id.first)->train_group_name;
+                    } else {
+                        return train_manager.get_train_group(a.second.train_id.first)->train_group_name <
+                               train_manager.get_train_group(b.second.train_id.first)->train_group_name;
+                    }
+                };
+            } else { // sort by cost
+                cmp_func = [&train_manager](const obj_t &a, const obj_t &b) {
+                    if (a.first.price + a.second.price != b.first.price + b.second.price) {
+                        return a.first.price + a.second.price < b.first.price + b.second.price;
+                    }
+                    if (a.second.to_time - a.first.from_time != b.second.to_time - b.first.from_time) {
+                        return a.second.to_time - a.first.from_time < b.second.to_time - b.first.from_time;
+                    }
+                    if (a.first.train_id != b.first.train_id) {
+                        return train_manager.get_train_group(a.first.train_id.first)->train_group_name <
+                               train_manager.get_train_group(b.first.train_id.first)->train_group_name;
+                    } else {
+                        return train_manager.get_train_group(a.second.train_id.first)->train_group_name <
+                               train_manager.get_train_group(b.second.train_id.first)->train_group_name;
+                    }
+                };
+            }
+            norb::SupremeKeep<obj_t> best_transfer(cmp_func);
+            for (const auto &mid_id : train_manager.station_id_vector) {
+                const auto list_from_mid = query_ticket(from_id, mid_id, date, sort_by);
+                for (const auto &from_mid_train : list_from_mid) {
+                    const auto datetime_at_arrival = from_mid_train.to_time;
+                    const auto best_mid_to =
+                        find_best_between(mid_id, to_id, datetime_at_arrival, sort_by, from_mid_train.train_id.first);
+                    if (not best_mid_to.has_value()) {
+                        continue; // skip if no valid train found
+                    }
+                    best_transfer.add(std::make_pair(from_mid_train, best_mid_to.value()));
+                }
+                // best_transfer.add(std::make_pair(best_from_mid.value(), best_mid_to.value()));
+            }
+
+            if (not best_transfer.val.has_value()) {
+                interface::log.as(LogLevel::WARNING)
+                    << "Query transfer failed: no valid transfer found from " << from << " to " << to << '\n';
+                interface::out.as() << "0\n";
+                return;
+            } else {
+                const auto [first_train, second_train] = best_transfer.val.value();
+                const auto first_train_name =
+                    train_manager.get_train_group(first_train.train_id.first)->train_group_name;
+                const auto second_train_name =
+                    train_manager.get_train_group(second_train.train_id.first)->train_group_name;
+                const auto mid_station_name = train_manager.station_name_from_id(first_train.to_station_id).value();
+                interface::out.as() << first_train_name << ' ' << from << ' ' << first_train.from_time << ' ' << "-> "
+                                    << mid_station_name << ' ' << first_train.to_time << ' ' << first_train.price << ' '
+                                    << first_train.remaining_seats << '\n';
+                interface::out.as() << second_train_name << ' ' << mid_station_name << ' ' << second_train.from_time
+                                    << ' ' << "-> " << to << ' ' << second_train.to_time << ' ' << second_train.price
+                                    << ' ' << second_train.remaining_seats << '\n';
+                return;
             }
         }
     };

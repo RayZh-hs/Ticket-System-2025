@@ -345,6 +345,39 @@ namespace norb {
             return *this;
         }
 
+        Datetime operator+(const int &minutes) const {
+            Datetime result;
+            result.total_minutes_since_epoch = this->total_minutes_since_epoch + minutes;
+            result._check_bounds_and_throw();
+            return result;
+        }
+
+        Datetime operator-(const int &minutes) const {
+            Datetime result;
+            result.total_minutes_since_epoch = this->total_minutes_since_epoch - minutes;
+            result._check_bounds_and_throw();
+            return result;
+        }
+
+        Datetime &operator+=(const int &minutes) {
+            this->total_minutes_since_epoch += minutes;
+            this->_check_bounds_and_throw();
+            return *this;
+        }
+
+        Datetime &operator-=(const int &minutes) {
+            this->total_minutes_since_epoch -= minutes;
+            this->_check_bounds_and_throw();
+            return *this;
+        }
+
+        [[nodiscard]] Datetime diff(const int &minutes) const {
+            Datetime result;
+            result.total_minutes_since_epoch = this->total_minutes_since_epoch - minutes;
+            result._check_bounds_and_throw();
+            return result;
+        }
+
         [[nodiscard]] Datetime diff(const Datetime &other) const {
             Datetime result;
             result.total_minutes_since_epoch = this->total_minutes_since_epoch - other.total_minutes_since_epoch;

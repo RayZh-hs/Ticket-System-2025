@@ -106,4 +106,11 @@ void register_commands(CommandRegistry &cmdr) {
                               {'d'}, // date of departure
                               {'p', "time"} // sort by "time" or "price"
                           });
+    cmdr.register_command("query_transfer", TicketSystem::query_transfer_and_print,
+                          {
+                              {'s'}, // from station name
+                              {'t'}, // to station name
+                              {'d'}, // date of departure
+                              {'p', "time"} // sort by "time" or "price"
+                          });
 }

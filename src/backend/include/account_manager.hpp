@@ -133,5 +133,10 @@ namespace ticket {
             account_store.remove_all(account_id);
             account_store.insert(account_id, account);
         }
+
+        void clear() {
+            account_store.clear();
+            login_store.clear();
+        }
     };
 } // namespace ticket

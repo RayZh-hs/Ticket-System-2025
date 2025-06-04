@@ -102,6 +102,14 @@ namespace ticket {
             return station_name_store.find_first(id);
         }
 
+        std::optional<std::string> train_name_from_id(const train_group_id_t &id) const {
+            const auto train_group_info = train_group_store.find_first(id);
+            if (train_group_info.has_value()) {
+                return static_cast<std::string>(train_group_info->train_group_name);
+            }
+            return std::nullopt;
+        }
+
         bool exists_train_group(const station_id_t &station_id) const {
             return train_group_store.count(station_id);
         }
@@ -239,19 +247,66 @@ namespace ticket {
             return (datetime_at_station - from_station_segment.arrival_time.to_minutes()).getDate();
         }
 
-        // Datetime get_departure_datetime(const TrainGroup &train_group_info, const int &station_serial,
-        //                                 const Date &first_departure_date) const {
-        //     const TrainGroupSegment &from_station_segment =
-        //         train_group_segments.get(train_group_info.segment_pointer, station_serial);
-        //     return Datetime(first_departure_date) + from_station_segment.departure_time;
-        // }
+        Datetime get_departure_datetime(const TrainGroup &train_group_info, const int &station_serial,
+                                        const Date &first_departure_date) const {
+            const TrainGroupSegment &from_station_segment =
+                train_group_segments.get(train_group_info.segment_pointer, station_serial);
+            return Datetime(first_departure_date) + from_station_segment.departure_time;
+        }
 
-        // Datetime get_arrival_datetime(const TrainGroup &train_group_info, const int &station_serial,
-        //                               const Date &first_departure_date) const {
-        //     const TrainGroupSegment &to_station_segment =
-        //         train_group_segments.get(train_group_info.segment_pointer, station_serial);
-        //     return Datetime(first_departure_date) + to_station_segment.arrival_time;
-        // }
+        Datetime get_arrival_datetime(const TrainGroup &train_group_info, const int &station_serial,
+                                      const Date &first_departure_date) const {
+            const TrainGroupSegment &to_station_segment =
+                train_group_segments.get(train_group_info.segment_pointer, station_serial);
+            return Datetime(first_departure_date) + to_station_segment.arrival_time;
+        }
+
+        std::optional<int> get_station_serial_from_id(const train_group_id_t &train_group_id,
+                                                      const station_id_t &station_id) const {
+            const auto &train_group_info = train_group_store.find_first(train_group_id).value();
+            const auto seg_ptr = train_group_info.segment_pointer;
+            for (int i = 0; i < seg_ptr.size; ++i) {
+                if (train_group_segments.get(seg_ptr, i).station_id == station_id) {
+                    return i; // Found the station serial
+                }
+            }
+            return std::nullopt; // Station not found in the train group
+        }
+
+        std::optional<int> get_station_serial_from_id(const TrainGroup &train_group_info,
+                                                      const station_id_t &station_id) const {
+            const auto seg_ptr = train_group_info.segment_pointer;
+            for (int i = 0; i < seg_ptr.size; ++i) {
+                if (train_group_segments.get(seg_ptr, i).station_id == station_id) {
+                    return i; // Found the station serial
+                }
+            }
+            return std::nullopt; // Station not found in the train group
+        }
+
+        std::optional<train_id_t> deduce_train_id_from(const train_group_id_t &train_group_id,
+                                                       const Date &departure_date_at_s,
+                                                       const station_id_t &from_station_id) const {
+            const auto &train_group_info = train_group_store.find_first(train_group_id).value();
+            const auto seg_ptr = train_group_info.segment_pointer;
+            std::optional<int> from_station_serial = get_station_serial_from_id(train_group_info, from_station_id);
+            if (not from_station_serial.has_value()) {
+                interface::log.as(LogLevel::DEBUG)
+                    << "(TrainManager) (deduce_train_id_from) Station ID " << from_station_id
+                    << " not found in train group " << train_group_id << ".\n";
+                return std::nullopt; // Station not found in the train group
+            }
+            const auto departure_date =
+                deduce_departure_date_from(train_group_info, from_station_serial.value(), departure_date_at_s);
+            if (train_group_info.sale_date_range.contains(departure_date)) {
+                return train_id_t(train_group_id, departure_date);
+            } else {
+                interface::log.as(LogLevel::DEBUG)
+                    << "(TrainManager) (deduce_train_id_from) Departure date " << departure_date
+                    << " is not within the sale date range of train group " << train_group_id << ".\n";
+                return std::nullopt; // Departure date is not within the sale date range
+            }
+        }
 
         struct TrainRange {
             train_id_t train_id;
@@ -276,10 +331,8 @@ namespace ticket {
                 // Check if the train group is available on the given datetime
                 const auto arrival_datetime_range = get_departure_datetime_range(
                     candidate_train_group.train_group_id, candidate_train_group.station_from_serial);
-                if (except.has_value() &&
-                    except.value() == candidate_train_group.train_group_id) {
-                    interface::log.as(LogLevel::DEBUG)
-                        << "Skipped because train group is in the except list.\n";
+                if (except.has_value() && except.value() == candidate_train_group.train_group_id) {
+                    interface::log.as(LogLevel::DEBUG) << "Skipped because train group is in the except list.\n";
                     continue; // Skip this train group
                 }
                 if (not arrival_datetime_range.contains(datetime)) {
@@ -305,6 +358,15 @@ namespace ticket {
                                      candidate_train_group.station_to_serial);
             }
             return results;
+        }
+
+        void clear() {
+            train_group_store.clear();
+            train_group_release_store.clear();
+            station_name_store.clear();
+            station_train_group_lookup_store.clear();
+            // train_group_segments.clear();
+            station_id_vector.clear();
         }
     };
 } // namespace ticket

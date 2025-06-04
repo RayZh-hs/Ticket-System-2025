@@ -18,6 +18,8 @@ namespace ticket {
     inline constexpr DatetimePlaceholder datetime_placeholder{};
 
     class TicketSystem {
+      public:
+        struct TrainRideInfo; // forward declaration
       private:
         AccountManager account_manager_;
         TrainManager train_manager_;
@@ -28,6 +30,45 @@ namespace ticket {
         using Date = norb::Datetime::Date;
         using interface = global_interface;
         using station_id_t = TrainManager::station_id_t;
+
+        static std::optional<TrainRideInfo>
+        find_best_between(const station_id_t &from_id, const station_id_t &to_id, const Datetime &datetime,
+                          const std::string &sort_by, const std::optional<train_group_id_t> &except = std::nullopt) {
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &train_manager = get_instance().train_manager_;
+
+            if (from_id == to_id) {
+                return std::nullopt;
+            }
+            // find all trains that leave at from at date and arrive in to
+            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, datetime, except);
+            if (train_query_result.empty())
+                return std::nullopt;
+            // from ticket_manager retrieve the financial information
+            norb::vector<TrainFareSegment> financial_info;
+            norb::vector<Datetime> duration;
+            for (const auto &train_item : train_query_result) {
+                financial_info.push_back(ticket_manager.get_price_seat_for_section(
+                    train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
+                duration.push_back((train_item.to_time - train_item.from_time));
+            }
+            int best_cursor = -1;
+            const int train_count = train_query_result.size();
+            if (sort_by == "price") {
+                best_cursor = norb::make_supreme(train_count, [&financial_info](const int &a, const int &b) {
+                    return financial_info[a].price < financial_info[b].price;
+                });
+            } else { // sort by time
+                best_cursor = norb::make_supreme(
+                    train_count, [&duration](const int &a, const int &b) { return duration[a] < duration[b]; });
+            }
+            return best_cursor == -1
+                       ? std::nullopt
+                       : std::make_optional<TrainRideInfo>(
+                             {train_query_result[best_cursor].train_id, from_id, to_id,
+                              train_query_result[best_cursor].from_time, train_query_result[best_cursor].to_time,
+                              financial_info[best_cursor].price, financial_info[best_cursor].remaining_seats});
+        }
 
       public:
         static TicketSystem &get_instance() {
@@ -441,45 +482,6 @@ namespace ticket {
             }
         }
 
-        static std::optional<TrainRideInfo>
-        find_best_between(const station_id_t &from_id, const station_id_t &to_id, const Datetime &datetime,
-                          const std::string &sort_by, const std::optional<train_group_id_t> &except = std::nullopt) {
-            auto &ticket_manager = get_instance().ticket_manager_;
-            auto &train_manager = get_instance().train_manager_;
-
-            if (from_id == to_id) {
-                return std::nullopt;
-            }
-            // find all trains that leave at from at date and arrive in to
-            const auto &train_query_result = train_manager.query_ticket(from_id, to_id, datetime, except);
-            if (train_query_result.empty())
-                return std::nullopt;
-            // from ticket_manager retrieve the financial information
-            norb::vector<TrainFareSegment> financial_info;
-            norb::vector<Datetime> duration;
-            for (const auto &train_item : train_query_result) {
-                financial_info.push_back(ticket_manager.get_price_seat_for_section(
-                    train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
-                duration.push_back((train_item.to_time - train_item.from_time));
-            }
-            int best_cursor = -1;
-            const int train_count = train_query_result.size();
-            if (sort_by == "price") {
-                best_cursor = norb::make_supreme(train_count, [&financial_info](const int &a, const int &b) {
-                    return financial_info[a].price < financial_info[b].price;
-                });
-            } else { // sort by time
-                best_cursor = norb::make_supreme(
-                    train_count, [&duration](const int &a, const int &b) { return duration[a] < duration[b]; });
-            }
-            return best_cursor == -1
-                       ? std::nullopt
-                       : std::make_optional<TrainRideInfo>(
-                             {train_query_result[best_cursor].train_id, from_id, to_id,
-                              train_query_result[best_cursor].from_time, train_query_result[best_cursor].to_time,
-                              financial_info[best_cursor].price, financial_info[best_cursor].remaining_seats});
-        }
-
         static void query_transfer_and_print(const std::string &from, const std::string &to, const Date &date,
                                              const std::string &sort_by) {
             auto &ticket_manager = get_instance().ticket_manager_;
@@ -564,6 +566,173 @@ namespace ticket {
                                     << ' ' << second_train.remaining_seats << '\n';
                 return;
             }
+        }
+
+        static std::variant<int, std::string> buy_ticket(const std::string &username,
+                                                         const std::string &train_group_name, const Date &date,
+                                                         const int &count, const int &from_station_name,
+                                                         const int &to_station_name, const bool allow_queueing) {
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &train_manager = get_instance().train_manager_;
+            auto &account_manager = get_instance().account_manager_;
+
+            const auto account_id = Account::id_from_username(username);
+            if (not account_manager.is_active(account_id)) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Buy ticket failed: user " << username << " is not logged in" << '\n';
+                return -1;
+            }
+            const auto train_group_id = TrainManager::train_group_id_from_name(train_group_name);
+            if (not train_manager.has_released_train_group(train_group_id)) {
+                global_interface::log.as(LogLevel::WARNING) << "Buy ticket failed: train group " << train_group_name
+                                                            << " does not exist or has not been released" << '\n';
+                return -1;
+            }
+            const auto train_id = train_manager.deduce_train_id_from(train_group_id, date, from_station_name);
+            if (not train_id.has_value()) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Buy ticket failed: train group " << train_group_name << " does not have a train on " << date
+                    << " from station #" << from_station_name << '\n';
+                return -1;
+            }
+            const auto train_group_info = train_manager.get_train_group(train_group_id);
+            const auto from_station_serial =
+                train_manager.get_station_serial_from_id(train_group_info.value(), from_station_name);
+            const auto to_station_serial =
+                train_manager.get_station_serial_from_id(train_group_info.value(), to_station_name);
+            if (not to_station_serial.has_value()) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Buy ticket failed: train group " << train_group_name << " does not have a train to station #"
+                    << to_station_name << '\n';
+                return -1;
+            }
+            // Retrieve the price and remaining seats for the section
+            const auto [price, remaining_seats] = ticket_manager.get_price_seat_for_section(
+                train_id.value(), from_station_name, to_station_serial.value());
+            interface::log.as(LogLevel::DEBUG) << "Train ID: " << train_id.value() << ", Price: " << price
+                                               << ", Remaining Seats: " << remaining_seats << '\n';
+            if (remaining_seats < count) {
+                interface::log.as(LogLevel::INFO) << "Not enough seats available for purchase" << '\n';
+                if (not allow_queueing) {
+                    interface::log.as(LogLevel::WARNING) << "Buy ticket failed: Queueing is disabled" << '\n';
+                    return -1; // Not enough seats and queueing is not allowed
+                } else {
+                    interface::log.as(LogLevel::INFO) << "Queueing is enabled, appending to queue" << '\n';
+                    ticket_manager.register_order({.account = account_id,
+                                                   .train_id = train_id.value(),
+                                                   .from_station_serial = from_station_serial.value(),
+                                                   .to_station_serial = to_station_serial.value(),
+                                                   .from_time = train_manager.get_departure_datetime(train_group_info.value(), from_station_serial.value(), train_id->second),
+                                                   .to_time = train_manager.get_arrival_datetime(train_group_info.value(), to_station_serial.value(), train_id->second),
+                                                   .purchase_timestamp = interface::get_timestamp(),
+                                                   .count = count,
+                                                   .total_price = price * count,
+                                                   .status = Order::Status::Pending});
+                    return "queue";
+                }
+            } else {
+                interface::log.as(LogLevel::DEBUG) << "Sufficient seats available, proceeding with purchase" << '\n';
+                // Register the order
+                ticket_manager.register_order({.account = account_id,
+                                               .train_id = train_id.value(),
+                                               .from_station_serial = from_station_serial.value(),
+                                               .to_station_serial = to_station_serial.value(),
+                                               .from_time = train_manager.get_departure_datetime(train_group_info.value(), from_station_serial.value(), train_id->second),
+                                               .to_time = train_manager.get_arrival_datetime(train_group_info.value(), to_station_serial.value(), train_id->second),
+                                               .purchase_timestamp = interface::get_timestamp(),
+                                               .count = count,
+                                               .total_price = price * count,
+                                               .status = Order::Status::Success});
+                return price * count; // Return the total price of the order
+            }
+        }
+
+        static void query_order_and_print(const std::string &username) {
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &account_manager = get_instance().account_manager_;
+            auto &train_manager = get_instance().train_manager_;
+
+            const auto account_id = Account::id_from_username(username);
+            if (not account_manager.is_active(account_id)) {
+                interface::log.as(LogLevel::WARNING)
+                    << "Query order failed: user " << username << " is not logged in" << '\n';
+                interface::out.as() << "-1\n";
+                return;
+            }
+            const auto orders = ticket_manager.get_orders_by_account(account_id);
+            if (orders.empty()) {
+                interface::log.as(LogLevel::INFO) << "No orders found for user " << username << '\n';
+                interface::out.as() << "-1\n"; // No orders found
+                return;
+            }
+            interface::out.as() << orders.size() << '\n';
+            // [<STATUS>] <trainID> <FROM> <LEAVING_TIME> -> <TO> <ARRIVING_TIME> <PRICE> <NUM>
+            for (const auto &order : orders) {
+                const auto &train_group_info = train_manager.get_train_group(order.train_id.first);
+                const auto &from_station_name = train_manager.station_name_from_id(
+                    train_manager.get_train_group_segment(train_group_info->segment_pointer, order.from_station_serial).station_id
+                );
+                const auto &to_station_name = train_manager.station_name_from_id(
+                    train_manager.get_train_group_segment(train_group_info->segment_pointer, order.to_station_serial).station_id
+                );
+                interface::out.as(nullptr)  << '[' << order.status_string() << "] "
+                                            << train_group_info->train_group_name << ' '
+                                            << from_station_name.value() << ' '
+                                            << order.from_time << " -> "
+                                            << to_station_name.value() << ' '
+                                            << order.to_time << ' '
+                                            << order.total_price << ' '
+                                            << order.count << '\n';
+            }
+        }
+
+        static int refund_ticket(const std::string &username, int order_serial) {
+            --order_serial; // Convert to 0-based index
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &account_manager = get_instance().account_manager_;
+
+            const auto account_id = Account::id_from_username(username);
+            // Verify that the user has logged in
+            if (not account_manager.is_active(account_id)) {
+                interface::log.as(LogLevel::WARNING)
+                    << "Refund ticket failed: user " << username << " is not logged in" << '\n';
+                return -1; // User is not logged in
+            }
+            // Retrieve the order
+            const auto orders = ticket_manager.get_orders_by_account(account_id);
+            if (order_serial < 0 or order_serial >= static_cast<int>(orders.size())) {
+                interface::log.as(LogLevel::WARNING)
+                    << "Refund ticket failed: order serial " << order_serial + 1 << " is out of range" << '\n';
+                interface::log.as(LogLevel::DEBUG)
+                    << "Total orders for user " << username << ": " << orders.size() << '\n';
+                return -1; // Invalid order serial
+            }
+            // Modify the order_serial-th newest order
+            const auto &order = orders[orders.size() - 1 - order_serial];
+            try {
+                ticket_manager.refund_order(order);
+                return 0;
+            }
+            catch (const std::runtime_error &e) {
+                interface::log.as(LogLevel::WARNING) << "Refund ticket failed: " << e.what() << '\n';
+                return -1; // Refund failed
+            }
+        }
+
+        static int clean() {
+            auto &train_manager = get_instance().train_manager_;
+            auto &ticket_manager = get_instance().ticket_manager_;
+            auto &account_manager = get_instance().account_manager_;
+
+            interface::log.as(LogLevel::INFO) << "Cleaning up the ticket system" << '\n';
+            train_manager.clear();
+            interface::log.as(LogLevel::DEBUG) << "Train manager cleaned" << '\n';
+            ticket_manager.clear();
+            interface::log.as(LogLevel::DEBUG) << "Ticket manager cleaned" << '\n';
+            account_manager.clear();
+            interface::log.as(LogLevel::DEBUG) << "Account manager cleaned" << '\n';
+
+            return 0;
         }
     };
 } // namespace ticket

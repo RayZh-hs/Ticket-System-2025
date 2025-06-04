@@ -101,16 +101,36 @@ void register_commands(CommandRegistry &cmdr) {
                           });
     cmdr.register_command("query_ticket", TicketSystem::query_ticket_and_print,
                           {
-                              {'s'}, // from station name
-                              {'t'}, // to station name
-                              {'d'}, // date of departure
+                              {'s'},        // from station name
+                              {'t'},        // to station name
+                              {'d'},        // date of departure
                               {'p', "time"} // sort by "time" or "price"
                           });
     cmdr.register_command("query_transfer", TicketSystem::query_transfer_and_print,
                           {
-                              {'s'}, // from station name
-                              {'t'}, // to station name
-                              {'d'}, // date of departure
+                              {'s'},        // from station name
+                              {'t'},        // to station name
+                              {'d'},        // date of departure
                               {'p', "time"} // sort by "time" or "price"
                           });
+    cmdr.register_command("buy_ticket", $print(TicketSystem::buy_ticket),
+                          {
+                              {'u'},       // username
+                              {'i'},       // train group name (aka. trainID)
+                              {'d'},       // date of departure
+                              {'n'},       // the number of tickets to buy
+                              {'f'},       // from station name
+                              {'t'},       // to station name
+                              {'q', false} // allow queueing, default is false
+                          });
+    cmdr.register_command("query_order", TicketSystem::query_order_and_print,
+                          {
+                              {'u'} // username
+                          });
+    cmdr.register_command("refund_ticket", $print(TicketSystem::refund_ticket),
+                          {
+                              {'u'},   // username
+                              {'n', 1} // order id
+                          });
+    cmdr.register_command("clean", $print(TicketSystem::clean), {});
 }

@@ -60,14 +60,21 @@ namespace ticket {
         using account_id_t = hash_t;
         using train_group_id_t = hash_t;
         using Date = norb::Datetime::Date;
+        using Datetime = norb::Datetime;
         using timestamp_t = int;
         using price_t = int;
+        enum Status { Success, Pending, Refunded };
 
         account_id_t account;
         train_id_t train_id;
-        timestamp_t purchase_timestamp;
+        int from_station_serial = 0;
+        int to_station_serial = 0;
+        Datetime from_time;             // the datetime of departure
+        Datetime to_time;               // the datetime of arrival
+        timestamp_t purchase_timestamp; // the datetime of first purchase
+        int count = 0;
         price_t total_price;
-        bool is_pending = false;
+        Status status = Status::Success;
 
         using order_id_t = norb::Pair<account_id_t, timestamp_t>;
         order_id_t id() const {
@@ -76,12 +83,27 @@ namespace ticket {
         static order_id_t id_from_account_and_timestamp(const account_id_t &account, const timestamp_t &timestamp) {
             return {account, timestamp};
         }
+
+        std::string status_string() const {
+            switch (status) {
+            case Success:
+                return "success";
+            case Pending:
+                return "pending";
+            case Refunded:
+                return "refunded";
+            default:
+                return "UNKNOWN";
+            }
+        }
     };
 
     class TicketManager {
       public:
         using price_t = int;
         using station_id_t = global_hash_method::hash_t;
+        using timestamp_t = Order::timestamp_t;
+        using order_id_t = Order::order_id_t;
         using interface = global_interface;
 
       private:
@@ -89,6 +111,8 @@ namespace ticket {
         using TrainStatusSegmentPointer = TrainFare::SegmentList::SegmentPointer;
 
         norb::BPlusTree<Order::order_id_t, Order, norb::MANUAL> purchase_history_store;
+        norb::BPlusTree<norb::Pair<train_id_t, timestamp_t>, order_id_t, norb::MANUAL> pending_order_store;
+        ;
         norb::BPlusTree<train_id_t, TrainFare, norb::MANUAL> train_fare_store;
         norb::FiledSegmentList<TrainFareSegment> train_fare_segments;
 
@@ -98,7 +122,7 @@ namespace ticket {
             int seat_num = 0;
         };
         norb::BPlusTree<train_group_id_t, TemporalTrainGroupInfo, norb::MANUAL> temporary_train_group_info_store;
-    
+
       public:
         TicketManager() : train_fare_segments(train_fare_segments_name) {
         }
@@ -112,9 +136,8 @@ namespace ticket {
 
         // this will not check the validity of the train group ID, or that it has not been released
         void release_train_group(const train_group_id_t &train_group_id) {
-            const auto [
-                prices, sale_date_range, seat_num
-            ] = temporary_train_group_info_store.find_first(train_group_id).value();
+            const auto [prices, sale_date_range, seat_num] =
+                temporary_train_group_info_store.find_first(train_group_id).value();
             for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); ++date) {
                 auto segment_pointer = train_fare_segments.allocate(prices.size());
                 interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
@@ -161,7 +184,8 @@ namespace ticket {
             }
             norb::vector<int> remaining_seats;
             for (int i = 0; i < train_status->segment_pointer.size; ++i) {
-                remaining_seats.push_back(get_train_status_station_segment(train_status->segment_pointer, i).remaining_seats);
+                remaining_seats.push_back(
+                    get_train_status_station_segment(train_status->segment_pointer, i).remaining_seats);
             }
             return remaining_seats;
         }
@@ -176,6 +200,95 @@ namespace ticket {
                 throw std::out_of_range("Invalid segment range query");
             }
             return train_status->join_segments(train_fare_segments, from_serial, to_serial - 1);
+        }
+
+        void register_order(const Order &order) {
+            if (purchase_history_store.count(order.id())) {
+                // this should not happen, unless timestamps are not unique
+                throw std::runtime_error("Order already exists.");
+            }
+            purchase_history_store.insert(order.id(), order);
+            if (order.Pending) {
+                pending_order_store.insert({order.train_id, order.purchase_timestamp}, order.id());
+            } else {
+                // update the number of remaining seats
+                auto train_status = get_train_status(order.train_id);
+                if (not train_status.has_value()) {
+                    throw std::runtime_error("Train status not found."); // this should not happen
+                }
+                auto segment_pointer = train_status->segment_pointer;
+                for (int i = order.from_station_serial; i < order.to_station_serial; ++i) {
+                    auto segment = train_fare_segments.get(segment_pointer, i);
+                    assert(segment.remaining_seats >= order.count && "Not enough seats available");
+                    segment.remaining_seats -= order.count;
+                    train_fare_segments.set(segment_pointer, i, segment);
+                }
+            }
+        }
+
+        norb::vector<Order> get_orders_by_account(const Order::account_id_t &account_id) {
+            norb::vector<Order> orders = purchase_history_store.find_all_in_range(
+                norb::unpack_range(account_id, norb::Range<Order::timestamp_t>::full_range()));
+            return orders;
+        }
+
+        void refund_order(Order order) {
+            const auto order_id = order.id();
+            purchase_history_store.remove(order_id, order);
+            if (order.status == Order::Status::Refunded) {
+                throw std::runtime_error("Order already refunded.");
+            }
+            order.status = Order::Status::Refunded;
+            purchase_history_store.insert(order_id, order);
+            // update the number of remaining seats
+            const auto train_status = get_train_status(order.train_id);
+            if (not train_status.has_value()) {
+                throw std::runtime_error("Train status not found."); // this should not happen
+            }
+            const auto segment_pointer = train_status->segment_pointer;
+            for (int i = order.from_station_serial; i < order.to_station_serial; ++i) {
+                auto segment = train_fare_segments.get(segment_pointer, i);
+                segment.remaining_seats += order.count;
+                train_fare_segments.set(segment_pointer, i, segment);
+            }
+            // look for pending orders that can now be verified
+            auto pending_orders = pending_order_store.find_all_in_range(
+                norb::unpack_range(order.train_id, norb::Range<Order::timestamp_t>::full_range())
+            );
+            for (const auto &pending_order_id : pending_orders) {
+                auto pending_order = purchase_history_store.find_first(pending_order_id).value();
+                assert(pending_order.status == Order::Status::Pending &&
+                       "Pending order should be in pending status");
+                const auto [_, remaining_seats] = get_price_seat_for_section(
+                    pending_order.train_id, pending_order.from_station_serial, pending_order.to_station_serial);
+                if (remaining_seats >= pending_order.count) {
+                    // this order can be satisfied
+                    assert(purchase_history_store.remove(pending_order_id, pending_order));
+                    assert(pending_order_store.remove(
+                        {pending_order.train_id, pending_order.purchase_timestamp}, pending_order_id
+                    ));
+                    pending_order.status = Order::Status::Success;
+                    purchase_history_store.insert(pending_order_id, pending_order);
+                    // update the number of remaining seats
+                    for (int i = pending_order.from_station_serial; i < pending_order.to_station_serial; ++i) {
+                        auto segment = train_fare_segments.get(segment_pointer, i);
+                        assert(segment.remaining_seats >= pending_order.count && "Not enough seats available");
+                        segment.remaining_seats -= pending_order.count;
+                        train_fare_segments.set(segment_pointer, i, segment);
+                    }
+                    interface::log.as(LogLevel::DEBUG)
+                        << "Pending order " << pending_order_id << " has been successfully processed.\n";
+                }
+            }
+        }
+
+        void clear() {
+            purchase_history_store.clear();
+            pending_order_store.clear();
+            train_fare_store.clear();
+            temporary_train_group_info_store.clear();
+            // train_fare_segments = norb::FiledSegmentList<TrainFareSegment>(train_fare_segments_name);
+            interface::log.as(LogLevel::DEBUG) << "TicketManager cleared.\n";
         }
     };
 } // namespace ticket

@@ -7,11 +7,11 @@
 #include <cassert>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <queue> // only used in debug
 #include <stlite/range.hpp>
 #include <string>
 #include <type_traits>
-#include <optional>
 
 namespace norb {
     namespace impl {
@@ -445,7 +445,7 @@ namespace norb {
             if (root_node_is == node_type::index) {
                 // An index root underflows if it has 0 keys (implying 1 child)
                 // This single child becomes the new root.
-                assert(old_root_handle.const_ref<IndexNode>()->size == 1 &&    // done part of fix
+                assert(old_root_handle.const_ref<IndexNode>()->size == 1 && // done part of fix
                        "Index root underflow implies 0 keys, 1 child");
                 root_handle.val = old_root_handle.const_ref<IndexNode>()->children[0];
                 PersistentMemory::remove<IndexNode>(old_root_handle);
@@ -530,7 +530,8 @@ namespace norb {
             }
         }
 
-        void find_all_in_range_do(Range<idx_t> range, const std::function<void(const idx_t &, const val_t &)> &function) const {
+        void find_all_in_range_do(Range<idx_t> range,
+                                  const std::function<void(const idx_t &, const val_t &)> &function) const {
             if (tree_height.val == 0 || range.is_empty())
                 return;
             MutableHandle handle = root_handle.val;
@@ -633,12 +634,10 @@ namespace norb {
                     leaf_node_const_href->data[within_leaf_node_pos].first != key ||
                     leaf_node_const_href->data[within_leaf_node_pos].second != val)
                     return false; // Element not found
-            }
-            else {
+            } else {
                 if (within_leaf_node_pos >= leaf_node_const_href->size ||
                     leaf_node_const_href->data[within_leaf_node_pos].first != key)
                     return false; // Element not found
-
             }
 
             tree_size.val--;
@@ -668,7 +667,7 @@ namespace norb {
                 assert(history.empty() && tree_height.val > 1);
                 // If index root has 0 keys (size refers to keys), it means it has 1 child.
                 // This child becomes the new root.
-                if (root_handle.val.const_ref<IndexNode>()->size <= 1) {    // done does this fix work? seems to have
+                if (root_handle.val.const_ref<IndexNode>()->size <= 1) { // done does this fix work? seems to have
                     handle_root_underflow(node_type::index);
                 }
             }
@@ -903,6 +902,34 @@ namespace norb {
                 }
             }
             std::cout << "--- End Traversal ---" << std::endl << std::endl;
+        }
+
+      private:
+        void recursively_remove(MutableHandle &handle, const int h_from_root = 0) {
+            if (handle.is_nullptr())
+                return;
+
+            if (h_from_root < tree_height.val - 1) { 
+                auto index_node_href = handle.ref<IndexNode>();
+                for (size_t i = 0; i < index_node_href->size; ++i) {
+                    recursively_remove(index_node_href->children[i], h_from_root + 1);
+                }
+                PersistentMemory::remove<IndexNode>(handle);
+            } else { // Leaf node
+                auto leaf_node_href = handle.ref<LeafNode>();
+                PersistentMemory::remove<LeafNode>(handle);
+            }
+            handle.set_nullptr();
+        }
+
+      public:
+        void clear() {
+            if (tree_height.val == 0)
+                return;
+            recursively_remove(root_handle.val);
+            root_handle.val.set_nullptr();
+            tree_height.val = 0;
+            tree_size.val = 0;
         }
     };
 } // namespace norb

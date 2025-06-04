@@ -3,12 +3,12 @@
 if [ $# -eq 0 ]; then
   echo "Usage: $0 <testcase_group_name>"
   echo "Available testcase groups from config.json:"
-  jq -r '.Groups[].GroupName' testcases/config.json | sed 's/^/  /'
+  jq -r '.Groups[].GroupName' testcases/1867/config.json | sed 's/^/  /'
   exit 1
 fi
 
-if [ ! -e testcases/config.json ]; then
-  echo "./testcases/config.json does not exist, please extract testcases to that directory."
+if [ ! -e testcases/1867/config.json ]; then
+  echo "./testcases/1867/config.json does not exist, please extract testcases to that directory."
   exit 1
 fi
 
@@ -18,17 +18,17 @@ if [ ! -e "$(which jq)" ]; then
   exit 1
 fi
 
-if ! jq -e ".Groups[] | select(.GroupName == \"$1\")" testcases/config.json > /dev/null; then
+if ! jq -e ".Groups[] | select(.GroupName == \"$1\")" testcases/1867/config.json > /dev/null; then
   echo "Testcase group '$1' not found in config.json"
   echo "Available testcase groups:"
-  jq -r '.Groups[].GroupName' testcases/config.json | sed 's/^/  /'
+  jq -r '.Groups[].GroupName' testcases/1867/config.json | sed 's/^/  /'
   exit 1
 fi
 
-list=$(jq ".Groups[] | select(.GroupName == \"$1\") | .TestPoints[]" testcases/config.json)
+list=$(jq ".Groups[] | select(.GroupName == \"$1\") | .TestPoints[]" testcases/1867/config.json)
 
 exename="code"
-if [ ! -e "$exename" ]; then
+if [ ! -e "cmake-build-debug/$exename" ]; then
   echo "Please compile the ticket system and place the executable at \"$exename\""
   exit 1
 fi
@@ -50,10 +50,10 @@ function tmpdir () {
 }
 
 testdir="$(tmpdir)"
-cp "$exename" "$testdir/"
+cp "cmake-build-debug/$exename" "$testdir/"
 exe="$testdir/$exename"
 cwd="$(pwd)"
-basedir="$cwd/testcases"
+basedir="$cwd/testcases/1867"
 
 cd "$testdir"
 
@@ -64,7 +64,7 @@ for i in $list; do
   difffile="$(tmp)"
   if diff -ZB "$outfile" "$basedir/$i.out" > "$difffile"; then true; else
     cat "$difffile" | head -5
-    backup="test-$1-$i-$(date '+%s').log"
+    backup="testcases/test-$1-$i-$(date '+%s').log"
     cp "$outfile" "$cwd/$backup"
     echo "Test failed on input #$i."
     echo "Output saved to $backup"

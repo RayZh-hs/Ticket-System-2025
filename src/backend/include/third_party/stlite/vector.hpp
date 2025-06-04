@@ -25,7 +25,7 @@ namespace norb {
     using pointer = T *;
     using const_pointer = const T *;
     using size_type = size_t;
-    
+
   private:
     static constexpr size_t STARTUP_SIZE = 16;
     static constexpr float MULTIPLIER = 2.;
@@ -79,14 +79,21 @@ namespace norb {
      * cur_size_bound - 1
      */
     void grow_space() {
-      const auto new_size_bound =
-          static_cast<size_t>(cur_size_bound * MULTIPLIER);
-      T *new_base_ptr = raw_new(new_size_bound);
-      // First move the old data to the new data.
-      memcpy(new_base_ptr, base_ptr, sizeof(T) * cur_size_bound);
-      // Next, delete the old space WITHOUT DESTRUCTING.
+      const auto new_size_bound = static_cast<size_t>(cur_size_bound * MULTIPLIER);
+      T* new_base_ptr = raw_new(new_size_bound);
+
+      if constexpr (std::is_trivially_copyable_v<T>) {
+        // Use memcpy for trivially copyable types
+        std::memcpy(new_base_ptr, base_ptr, sizeof(T) * cur_size);
+      } else {
+        // Use placement new and move semantics for complex types
+        for (size_t i = 0; i < cur_size; ++i) {
+          new (new_base_ptr + i) T(std::move(base_ptr[i]));
+          base_ptr[i].~T();
+        }
+      }
+
       operator delete[](base_ptr);
-      // Finally, update the data.
       base_ptr = new_base_ptr;
       cur_size_bound = new_size_bound;
     }

@@ -350,6 +350,7 @@ namespace ticket {
                     if (not arrival_date_range.contains(datetime.getDate())) {
                         interface::log.as(LogLevel::DEBUG)
                             << "Skipped because train group is not available on the given date.\n";
+                        continue;
                     }
                 } else {
                     // Check if the train group is available on the given datetime
@@ -364,19 +365,25 @@ namespace ticket {
                 const auto &train_group_info =
                     train_group_store.find_first(candidate_train_group.train_group_id).value();
                 // done fix this (fixed)
-                const auto fist_departure_date = deduce_departure_time_for_first_after(
-                    train_group_info, candidate_train_group.station_from_serial, datetime);
-                const auto &train_id = train_id_t(candidate_train_group.train_group_id, fist_departure_date);
+                Datetime::Date first_departure_date;
+                if (use_loose_date) {
+                    first_departure_date = deduce_departure_date_from(
+                        train_group_info, candidate_train_group.station_from_serial, datetime.getDate());
+                } else {
+                    first_departure_date = deduce_departure_time_for_first_after(
+                        train_group_info, candidate_train_group.station_from_serial, datetime);
+                }
+                const auto &train_id = train_id_t(candidate_train_group.train_group_id, first_departure_date);
                 interface::log.as(LogLevel::DEBUG) << "Registering train ID: " << train_id << '\n';
 
                 const auto from_station_info = get_train_group_segment(train_group_info.segment_pointer,
                                                                        candidate_train_group.station_from_serial);
                 const auto to_station_info =
                     get_train_group_segment(train_group_info.segment_pointer, candidate_train_group.station_to_serial);
-                results.emplace_back(norb::Pair{candidate_train_group.train_group_id, fist_departure_date},
-                                     Datetime(fist_departure_date) + from_station_info.departure_time,
+                results.emplace_back(norb::Pair{candidate_train_group.train_group_id, first_departure_date},
+                                     Datetime(first_departure_date) + from_station_info.departure_time,
                                      candidate_train_group.station_from_serial,
-                                     Datetime(fist_departure_date) + to_station_info.arrival_time,
+                                     Datetime(first_departure_date) + to_station_info.arrival_time,
                                      candidate_train_group.station_to_serial);
             }
             return results;

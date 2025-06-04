@@ -9,6 +9,10 @@
 
 #include <variant>
 
+#ifndef NDEBUG
+#include <map>
+#endif
+
 namespace ticket {
     struct DatetimePlaceholder {};
     std::ostream &operator<<(std::ostream &os, const DatetimePlaceholder &) {
@@ -30,6 +34,11 @@ namespace ticket {
         using Date = norb::Datetime::Date;
         using interface = global_interface;
         using station_id_t = TrainManager::station_id_t;
+
+#ifndef NDEBUG
+        inline static std::map<train_group_id_t, std::string> db_train_group_lookup;
+        inline static std::map<station_id_t, std::string> db_station_lookup;
+#endif
 
         static std::optional<TrainRideInfo>
         find_best_between(const station_id_t &from_id, const station_id_t &to_id, const Datetime &datetime,
@@ -247,6 +256,10 @@ namespace ticket {
                 assert(decoded_prices.size() == station_num - 1);
                 assert(decoded_travel_times.size() == station_num - 1);
                 assert(decoded_stopover_times.size() == station_num - 2);
+                // debug info register
+#ifndef NDEBUG
+                db_train_group_lookup[TrainManager::train_group_id_from_name(train_group_name)] = train_group_name;
+#endif
                 // build the segments for the train manager
                 std::vector<TrainGroupSegment> segments;
                 auto delta_time = norb::DeltaDatetime(start_time);
@@ -266,6 +279,11 @@ namespace ticket {
                         << arrival_time << ", departure at " << departure_time << '\n';
                     train_manager.register_station(decoded_station_names[i]);
                     const auto station_id = TrainManager::station_id_from_name(decoded_station_names[i]);
+#ifndef NDEBUG
+                    if (not db_station_lookup.contains(station_id)) {
+                        db_station_lookup[station_id] = decoded_station_names[i];
+                    }
+#endif
                     segments.emplace_back(station_id, arrival_time, departure_time,
                                           i < station_num - 1 ? decoded_prices[i] : 0 // Last station has no price
                     );

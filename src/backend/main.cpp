@@ -14,6 +14,7 @@ void register_commands(CommandRegistry &);
 
 int main() {
     norb::chore::remove_associated();
+    // std::freopen("../testcases/1867/2.in", "r", stdin);
     CommandRegistry cmdr;
     register_commands(cmdr);
     std::string line;

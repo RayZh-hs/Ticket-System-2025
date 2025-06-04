@@ -130,6 +130,7 @@ namespace ticket {
                                                       << " attempts login with HP=" << hashed_password << '\n';
             try {
                 account_manager.login(account_id, hashed_password);
+                interface::log.as(LogLevel::INFO) << "Login successful" << '\n';
                 return 0;
             } catch (std::runtime_error &e) {
                 global_interface::log.as(LogLevel::WARNING) << "Login failed: " << e.what() << '\n';
@@ -570,8 +571,8 @@ namespace ticket {
 
         static std::variant<int, std::string> buy_ticket(const std::string &username,
                                                          const std::string &train_group_name, const Date &date,
-                                                         const int &count, const int &from_station_name,
-                                                         const int &to_station_name, const bool allow_queueing) {
+                                                         const int &count, const std::string &from_station_name,
+                                                         const std::string &to_station_name, const bool allow_queueing) {
             auto &ticket_manager = get_instance().ticket_manager_;
             auto &train_manager = get_instance().train_manager_;
             auto &account_manager = get_instance().account_manager_;
@@ -588,18 +589,20 @@ namespace ticket {
                                                             << " does not exist or has not been released" << '\n';
                 return -1;
             }
-            const auto train_id = train_manager.deduce_train_id_from(train_group_id, date, from_station_name);
+            const station_id_t from_station_id = TrainManager::station_id_from_name(from_station_name);
+            const station_id_t to_station_id = TrainManager::station_id_from_name(to_station_name);
+            const auto train_id = train_manager.deduce_train_id_from(train_group_id, date, from_station_id);
             if (not train_id.has_value()) {
                 global_interface::log.as(LogLevel::WARNING)
                     << "Buy ticket failed: train group " << train_group_name << " does not have a train on " << date
-                    << " from station #" << from_station_name << '\n';
+                    << " from station " << from_station_name << '\n';
                 return -1;
             }
             const auto train_group_info = train_manager.get_train_group(train_group_id);
             const auto from_station_serial =
-                train_manager.get_station_serial_from_id(train_group_info.value(), from_station_name);
+                train_manager.get_station_serial_from_id(train_group_info.value(), from_station_id);
             const auto to_station_serial =
-                train_manager.get_station_serial_from_id(train_group_info.value(), to_station_name);
+                train_manager.get_station_serial_from_id(train_group_info.value(), to_station_id);
             if (not to_station_serial.has_value()) {
                 global_interface::log.as(LogLevel::WARNING)
                     << "Buy ticket failed: train group " << train_group_name << " does not have a train to station #"
@@ -608,7 +611,7 @@ namespace ticket {
             }
             // Retrieve the price and remaining seats for the section
             const auto [price, remaining_seats] = ticket_manager.get_price_seat_for_section(
-                train_id.value(), from_station_name, to_station_serial.value());
+                train_id.value(), from_station_serial.value(), to_station_serial.value());
             interface::log.as(LogLevel::DEBUG) << "Train ID: " << train_id.value() << ", Price: " << price
                                                << ", Remaining Seats: " << remaining_seats << '\n';
             if (remaining_seats < count) {

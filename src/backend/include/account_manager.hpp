@@ -73,7 +73,7 @@ namespace ticket {
 
         [[nodiscard]] std::optional<Account> find_user(const account_id_t &account_id) const {
             const auto found = account_store.find_all(account_id);
-            global_interface::log << "Find user for " << account_id << " yielded " << found << '\n';
+            global_interface::log.as(LogLevel::DEBUG) << "Find user for " << account_id << " yielded " << found << '\n';
             assert(found.size() <= 1);
             return (!found.empty()) ? std::optional(found[0]) : std::nullopt;
         }
@@ -116,6 +116,8 @@ namespace ticket {
                 throw std::runtime_error("Attempting to login non-existent user");
             }
             if (account_info.value().hashed_password != hashed_password) {
+                global_interface::log.as(LogLevel::WARNING) << "Error: User #" << account_id << " does not have the correct hashed password!\n";
+                throw std::runtime_error("Attempting to login with wrong password");
             }
             login_store.insert(account_id);
         }

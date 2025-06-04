@@ -26,8 +26,10 @@ int main() {
         // Set global timestamp
         interface::set_timestamp(instruction.timestamp);
         // Special impl for exit
-        if (instruction.command == "exit")
+        if (instruction.command == "exit") {
+            interface::out.as() << "bye" << '\n';
             break;
+        }
         try {
             cmdr.dispatch(instruction);
         } catch (command_registry_error &e) {

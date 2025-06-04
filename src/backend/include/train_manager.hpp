@@ -247,6 +247,16 @@ namespace ticket {
             return (datetime_at_station - from_station_segment.arrival_time.to_minutes()).getDate();
         }
 
+        // the first train in train_group_info that departs after the given datetime at the station
+        Date deduce_departure_time_for_first_after(const TrainGroup &train_group_info, const int &station_serial,
+                                                   const Datetime &after_datetime_at_station) const {
+            const TrainGroupSegment &from_station_segment = 
+                train_group_segments.get(train_group_info.segment_pointer, station_serial);
+            const auto critical_datetime = after_datetime_at_station - from_station_segment.departure_time.to_minutes();
+            // return ceil(critical_datetime)
+            return critical_datetime.getDateCeil();
+        }
+
         Datetime get_departure_datetime(const TrainGroup &train_group_info, const int &station_serial,
                                         const Date &first_departure_date) const {
             const TrainGroupSegment &from_station_segment =
@@ -342,8 +352,9 @@ namespace ticket {
                 }
                 const auto &train_group_info =
                     train_group_store.find_first(candidate_train_group.train_group_id).value();
+                // todo fix this
                 const auto fist_departure_date =
-                    deduce_departure_date_from(train_group_info, candidate_train_group.station_from_serial, datetime);
+                    deduce_departure_time_for_first_after(train_group_info, candidate_train_group.station_from_serial, datetime);
                 const auto &train_id = train_id_t(candidate_train_group.train_group_id, fist_departure_date);
                 interface::log.as(LogLevel::DEBUG) << "Registering train ID: " << train_id << '\n';
 

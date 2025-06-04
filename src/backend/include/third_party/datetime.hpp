@@ -315,6 +315,14 @@ namespace norb {
             return Date(getMonth(), getDay());
         }
 
+        Date getDateCeil() const {
+            if (total_minutes_since_epoch % impl::MINUTES_PER_DAY == 0) {
+                return getDate();
+            } else {
+                return (getDate() + 1); // Return the next day if not exactly at midnight
+            }
+        }
+
         Time getTime() const {
             return Time(getHour(), getMinute());
         }

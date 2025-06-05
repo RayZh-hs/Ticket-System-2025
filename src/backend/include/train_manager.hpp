@@ -4,7 +4,7 @@
 
 #include "b_plus_tree.hpp"
 #include "datetime.hpp"
-#include "stlite/filed_list.hpp"
+#include "stlite/persistent_vector.hpp"
 #include "stlite/fixed_string.hpp"
 #include "stlite/pair.hpp"
 #include "stlite/range.hpp"
@@ -86,8 +86,8 @@ namespace ticket {
         SegmentList train_group_segments;
 
       public:
-        norb::vector<station_id_t> station_id_vector;
-        TrainManager() : train_group_segments(train_group_segments_name) {
+        norb::PersistentVector<station_id_t> station_id_vector;
+        TrainManager() : train_group_segments(train_group_segments_name), station_id_vector("station_id.data") {
         }
 
         static auto train_group_id_from_name(const std::string &name) {
@@ -143,8 +143,8 @@ namespace ticket {
                                           .train_type = train_type};
 
             auto segment_pointer = train_group_segments.allocate(segments.size());
-            interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
-                                               << ", size=" << segment_pointer.size << ")\n";
+            // interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
+            //                                    << ", size=" << segment_pointer.size << ")\n";
             for (size_t i = 0; i < segments.size(); ++i) {
                 train_group_segments.set(segment_pointer, i, segments[i]);
             }
@@ -233,18 +233,19 @@ namespace ticket {
             return date_at_station - from_station_segment.arrival_time.to_days();
         }
 
+        // Get the FDD (First Departure Date) from a train group with the date when the train leaves at a given station
         Date deduce_departure_date_from(const TrainGroup &group_train_info, const int &station_serial,
                                         const Date &date_at_station) const {
             const TrainGroupSegment &from_station_segment =
                 train_group_segments.get(group_train_info.segment_pointer, station_serial);
-            return date_at_station - from_station_segment.arrival_time.to_days();
+            return date_at_station - from_station_segment.departure_time.to_days();
         }
 
         Date deduce_departure_date_from(const TrainGroup &group_train_info, const int &station_serial,
                                         const Datetime &datetime_at_station) const {
             const TrainGroupSegment &from_station_segment =
                 train_group_segments.get(group_train_info.segment_pointer, station_serial);
-            return (datetime_at_station - from_station_segment.arrival_time.to_minutes()).getDate();
+            return (datetime_at_station - from_station_segment.departure_time.to_minutes()).getDate();
         }
 
         // the first train in train_group_info that departs after the given datetime at the station
@@ -326,6 +327,8 @@ namespace ticket {
             int to_station_serial;
         };
 
+        // if use_loose_date is set to false, then the datetime is not required to be IN the range for the station
+        // in case of early arrival (datetime < first departure) the first train is returned
         norb::vector<TrainRange> query_ticket(const station_id_t &from_station_id, const station_id_t &to_station_id,
                                               const Datetime &datetime,
                                               const std::optional<train_group_id_t> &except = std::nullopt,
@@ -356,7 +359,8 @@ namespace ticket {
                     // Check if the train group is available on the given datetime
                     const auto arrival_datetime_range = get_departure_datetime_range(
                         candidate_train_group.train_group_id, candidate_train_group.station_from_serial);
-                    if (not arrival_datetime_range.contains(datetime)) {
+                    // if (not arrival_datetime_range.contains(datetime)) {
+                    if (not arrival_datetime_range.contains_from_right(datetime)) {
                         interface::log.as(LogLevel::DEBUG)
                             << "Skipped because train group is not available on the given datetime.\n";
                         continue; // Not available on this datetime
@@ -372,6 +376,10 @@ namespace ticket {
                 } else {
                     first_departure_date = deduce_departure_time_for_first_after(
                         train_group_info, candidate_train_group.station_from_serial, datetime);
+                    if (first_departure_date < train_group_info.sale_date_range.get_from()) {
+                        // overwrite with the first train to leave
+                        first_departure_date = train_group_info.sale_date_range.get_from();
+                    }
                 }
                 const auto &train_id = train_id_t(candidate_train_group.train_group_id, first_departure_date);
                 interface::log.as(LogLevel::DEBUG) << "Registering train ID: " << train_id << '\n';

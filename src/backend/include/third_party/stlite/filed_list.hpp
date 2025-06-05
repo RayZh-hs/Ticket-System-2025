@@ -70,6 +70,14 @@ namespace norb {
             return ret;
         }
 
+        void clear() {
+            size_ = 0;
+            f_stream.seekp(0, std::ios::beg);
+            filesystem::binary_write(f_stream, size_);
+            f_stream.flush(); // Ensure data is written
+            assert(f_stream.good());
+        }
+
       private:
         static constexpr auto file_open_mode = std::ios::binary | std::ios::in | std::ios::out;
         static constexpr int sizeof_t = sizeof(T_);

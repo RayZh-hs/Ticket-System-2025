@@ -205,7 +205,7 @@ namespace ticket {
                     << "ModifyProfile failed because " << username << " is not registered" << '\n';
                 return -1;
             }
-            if (not(current_user_id == account_id or current_account_info->privilege >= account_info->privilege)) {
+            if (not(current_user_id == account_id or current_account_info->privilege > account_info->privilege)) {
                 global_interface::log.as(LogLevel::WARNING)
                     << "ModifyProfile failed because " << current_username << " is not authorized" << '\n';
                 return -1;
@@ -552,7 +552,9 @@ namespace ticket {
             }
             norb::SupremeKeep<obj_t> best_transfer(cmp_func);
             for (const auto &mid_id : train_manager.station_id_vector) {
+                interface::log.as(LogLevel::DEBUG) << "Considering middle station: #" << mid_id << '\n';
                 const auto list_from_mid = query_ticket(from_id, mid_id, date, sort_by);
+                interface::log.as(LogLevel::DEBUG) << "From to Mid containing " << list_from_mid.size() << " trains" << '\n';
                 for (const auto &from_mid_train : list_from_mid) {
                     const auto datetime_at_arrival = from_mid_train.to_time;
                     const auto best_mid_to =
@@ -580,7 +582,7 @@ namespace ticket {
                 interface::out.as() << first_train_name << ' ' << from << ' ' << first_train.from_time << ' ' << "-> "
                                     << mid_station_name << ' ' << first_train.to_time << ' ' << first_train.price << ' '
                                     << first_train.remaining_seats << '\n';
-                interface::out.as() << second_train_name << ' ' << mid_station_name << ' ' << second_train.from_time
+                interface::out.as(nullptr) << second_train_name << ' ' << mid_station_name << ' ' << second_train.from_time
                                     << ' ' << "-> " << to << ' ' << second_train.to_time << ' ' << second_train.price
                                     << ' ' << second_train.remaining_seats << '\n';
                 return;

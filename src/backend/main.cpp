@@ -13,8 +13,9 @@ using ticket::TicketSystem;
 void register_commands(CommandRegistry &);
 
 int main() {
-    norb::chore::remove_associated();
-    // std::freopen("../testcases/1867/2.in", "r", stdin);
+    // norb::chore::remove_associated();
+    // std::freopen("../testcases/basic_3.in", "r", stdin);
+    // std::freopen("../testcases/basic_3.user.out", "w", stdout);
     CommandRegistry cmdr;
     register_commands(cmdr);
     std::string line;

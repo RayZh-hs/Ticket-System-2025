@@ -188,12 +188,12 @@ namespace ticket {
             const auto seat_num = temporary_train_group_info_store.get_seat_num(train_group_id);
             for (Date date = sale_date_range.get_from(); date <= sale_date_range.get_to(); ++date) {
                 auto segment_pointer = train_fare_segments.allocate(prices.size());
-                interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
-                                                   << ", size=" << segment_pointer.size << ")\n";
+                // interface::log.as(LogLevel::DEBUG) << "Allocated segment pointer: (cur=" << segment_pointer.cur
+                //                                    << ", size=" << segment_pointer.size << ")\n";
                 for (size_t i = 0; i < prices.size(); ++i) {
                     train_fare_segments.set(segment_pointer, i, {prices[i], seat_num});
-                    interface::log.as(LogLevel::DEBUG)
-                        << "Segment set to: price=" << prices[i] << " seats=" << seat_num << "\n";
+                    // interface::log.as(LogLevel::DEBUG)
+                    //     << "Segment set to: price=" << prices[i] << " seats=" << seat_num << "\n";
                 }
                 const auto train_id = train_id_t{train_group_id, date};
                 train_fare_store.insert(train_id, {train_id, segment_pointer});

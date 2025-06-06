@@ -18,5 +18,5 @@ namespace ticket {
     inline constexpr const char train_fare_segments_name[] = "train_fare.segments";
 
     using global_hash_method = norb::hash::Fnv1a64Hash;
-    using global_interface = TicketSystemDebugInterface;
+    using global_interface = TicketSystemStandardInterface;
 } // namespace ticket

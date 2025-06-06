@@ -135,7 +135,7 @@ namespace norb {
             if (index < 0 || index >= seg.size) {
                 throw std::range_error("norb::FiledSegmentList: INDEX OUT OF RANGE!");
             }
-            f_stream.seekg(getPos(seg.cur + index));
+            f_stream.seekp(getPos(seg.cur + index));
             filesystem::binary_write(f_stream, to);
             return to;
         }

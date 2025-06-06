@@ -40,6 +40,7 @@ namespace ticket {
         inline static std::map<station_id_t, std::string> db_station_lookup;
 #endif
 
+        // when the first train is fixed, we ought to compare the time of arrival
         static std::optional<TrainRideInfo>
         find_best_between(const station_id_t &from_id, const station_id_t &to_id, const Datetime &datetime,
                           const std::string &sort_by, const std::optional<train_group_id_t> &except = std::nullopt) {
@@ -55,11 +56,11 @@ namespace ticket {
                 return std::nullopt;
             // from ticket_manager retrieve the financial information
             norb::vector<TrainFareSegment> financial_info;
-            norb::vector<Datetime> duration;
+            norb::vector<int> duration;
             for (const auto &train_item : train_query_result) {
                 financial_info.push_back(ticket_manager.get_price_seat_for_section(
                     train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
-                duration.push_back((train_item.to_time - train_item.from_time));
+                duration.push_back((train_item.to_time.to_minutes()));
             }
             int best_cursor = -1;
             const int train_count = train_query_result.size();
@@ -560,13 +561,21 @@ namespace ticket {
             }
             norb::SupremeKeep<obj_t> best_transfer(cmp_func);
             for (const auto &mid_id : train_manager.station_id_vector) {
-                interface::log.as(LogLevel::DEBUG) << "Considering middle station: #" << mid_id << '\n';
+                // // todo remember to delete
+                // const auto mid_station_name = train_manager.station_name_from_id(mid_id);
+                // interface::log.as(LogLevel::DEBUG) << "Considering middle station: #" << mid_station_name.value() << '\n';
                 const auto list_from_mid = query_ticket(from_id, mid_id, date, sort_by);
                 interface::log.as(LogLevel::DEBUG) << "From to Mid containing " << list_from_mid.size() << " trains" << '\n';
                 for (const auto &from_mid_train : list_from_mid) {
+                    // // todo remember to delete
+                    // const auto from_mid_train_group_info = train_manager.get_train_group(from_mid_train.train_id.first);
+
                     const auto datetime_at_arrival = from_mid_train.to_time;
                     const auto best_mid_to =
                         find_best_between(mid_id, to_id, datetime_at_arrival, sort_by, from_mid_train.train_id.first);
+                    // // todo remember to delete
+                    // const auto mid_to_train_group_info = train_manager.get_train_group(from_mid_train.train_id.first);
+
                     if (not best_mid_to.has_value()) {
                         continue; // skip if no valid train found
                     }
@@ -635,6 +644,17 @@ namespace ticket {
                 global_interface::log.as(LogLevel::WARNING)
                     << "Buy ticket failed: train group " << train_group_name << " does not have a train to station #"
                     << to_station_name << '\n';
+                return -1;
+            }
+            if (train_group_info->seat_num < count) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Buy ticket failed: requested more tickets than train group " << train_group_name << " has seats";
+                return -1;
+            }
+            // Assert that the start station has a lower serial number than the destination
+            if (from_station_serial.value() >= to_station_serial.value()) {
+                global_interface::log.as(LogLevel::WARNING)
+                    << "Buy ticket failed: destination comes earlier than departure station\n";
                 return -1;
             }
             // Retrieve the price and remaining seats for the section

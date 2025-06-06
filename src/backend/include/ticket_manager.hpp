@@ -287,6 +287,7 @@ namespace ticket {
             const auto ori_status = order.status;
             interface::log.as(LogLevel::DEBUG) << "Encountered Order Status = " << order.status_string() << '\n';
             if (ori_status == Order::Status::Refunded) {
+                purchase_history_store.insert(order_id, order);
                 throw std::runtime_error("Order already refunded.");
             }
             else if (ori_status == Order::Pending) {

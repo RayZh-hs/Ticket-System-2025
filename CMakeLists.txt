@@ -8,6 +8,7 @@ include_directories(src/backend/include/third_party)
 
 # Main executable
 add_executable(code src/backend/main.cpp)
+#target_compile_options(code PRIVATE -O2)
 
 # Unit test executables
 file(GLOB UNIT_TEST_SOURCES src/backend/unit_test/*.cpp)

@@ -14,8 +14,10 @@ void register_commands(CommandRegistry &);
 
 int main() {
     // norb::chore::remove_associated();
-    // std::freopen("../testcases/basic_3.in", "r", stdin);
-    // std::freopen("../testcases/basic_3.user.out", "w", stdout);
+    // std::freopen("../testcases/basic_6.in", "r", stdin);
+    // std::ofstream err_stream("../testcases/z.stderr.capture", std::ofstream::app);
+    // std::cerr.rdbuf(err_stream.rdbuf());
+    std::freopen("../testcases/z.stderr.capture", "a+", stderr);
     CommandRegistry cmdr;
     register_commands(cmdr);
     std::string line;
@@ -108,14 +110,14 @@ void register_commands(CommandRegistry &cmdr) {
                               {'s'},        // from station name
                               {'t'},        // to station name
                               {'d'},        // date of departure
-                              {'p', "time"} // sort by "time" or "price"
+                              {'p', "time"} // sort by "time" or "cost"
                           });
     cmdr.register_command("query_transfer", TicketSystem::query_transfer_and_print,
                           {
                               {'s'},        // from station name
                               {'t'},        // to station name
                               {'d'},        // date of departure
-                              {'p', "time"} // sort by "time" or "price"
+                              {'p', "time"} // sort by "time" or "cost"
                           });
     cmdr.register_command("buy_ticket", $print(TicketSystem::buy_ticket),
                           {

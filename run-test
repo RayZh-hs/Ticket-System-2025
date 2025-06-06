@@ -54,6 +54,7 @@ cp "cmake-build-debug/$exename" "$testdir/"
 exe="$testdir/$exename"
 cwd="$(pwd)"
 basedir="$cwd/testcases/1867"
+#stderr_log="$cwd/testcases/z.latest.stdcerr.log"
 
 cd "$testdir"
 
@@ -61,6 +62,9 @@ for i in $list; do
   outfile="$(tmp)"
   echo "About to run input #$i..."
   time "$exe" < "$basedir/$i.in" > "$outfile"
+#    {
+#      time "$exe" < "$basedir/$i.in" > "$outfile"
+#    } 2> >(tee -a "$stderr_log" >&2)
   difffile="$(tmp)"
   if diff -ZB "$outfile" "$basedir/$i.out" > "$difffile"; then true; else
     cat "$difffile" | head -5

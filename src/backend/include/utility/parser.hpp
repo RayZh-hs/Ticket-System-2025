@@ -40,60 +40,62 @@ namespace ticket {
         std::vector<std::pair<key_t, arg_t>> kwargs;
     };
 
-    class Parser {
-      public:
-        // In ticket::Parser class
-        static Instruction parse(const std::string &str_in) {
-            Instruction inst;
-            const std::string s = norb::string::trim(str_in);
+class Parser {
+  public:
+    // In ticket::Parser class
+    static Instruction parse(const std::string &str_in) {
+        Instruction inst;
+        const std::string s = norb::string::trim(str_in); // Assuming norb::string::trim is available
 
-            if (s.empty()) { // Check again after all trimming
-                throw parser_error("Parser::parse error: Input string is empty after trimming.");
-            }
-
-            std::istringstream iss(s);
-            std::string token;
-
-            if (!(iss >> token))
-                throw parser_error("Parser::parse error: Missing timestamp.");
-            try {
-                // token is formed as [INTEGER]
-                assert(token.size() >= 3);
-                inst.timestamp = std::stoi(token.substr(1, token.size() - 2));
-            } catch (const std::exception &e) {
-                throw parser_error("Parser::parse error: Invalid timestamp '" + token + "'. " + e.what());
-            }
-
-            if (!(iss >> inst.command) || inst.command.empty()) {
-                throw parser_error("Parser::parse error: Missing or empty command name after timestamp.");
-            }
-
-            while (iss >> token) {
-                if (token.length() >= 2 && token[0] == '-') {
-                    char key_char = token[1];
-                    std::string value_arg;
-
-                    const std::streampos current_pos_before_value_peek = iss.tellg();
-                    std::string next_token_peek;
-
-                    if (iss >> next_token_peek) {
-                        if (!next_token_peek.empty() && next_token_peek[0] != '-') {
-                            value_arg = next_token_peek;
-                        } else {
-                            iss.seekg(current_pos_before_value_peek);
-                        }
-                    } else {
-                        iss.clear();
-                    }
-                    inst.kwargs.emplace_back(key_char, value_arg);
-                } else {
-                    throw parser_error("Parser::parse error: Unexpected token '" + token +
-                                       "' in arguments. Expected a key (e.g., -k).");
-                }
-            }
-            return inst;
+        if (s.empty()) { // Check again after all trimming
+            throw parser_error("Parser::parse error: Input string is empty after trimming.");
         }
-    };
+
+        std::istringstream iss(s);
+        std::string token; // Used for timestamp, then keys/values in loop
+
+        // 1. Parse Timestamp
+        if (!(iss >> token)) { // 'token' now holds the timestamp string e.g. "[123]"
+            throw parser_error("Parser::parse error: Missing timestamp.");
+        }
+
+        // Validate timestamp format [INTEGER]
+        if (token.length() < 3) { // Smallest valid is like "[1]" (length 3)
+            throw parser_error("Parser::parse error: Invalid timestamp format '" + token + "'. Too short (expected [INTEGER]).");
+        }
+
+        const std::string timestamp_content = token.substr(1, token.length() - 2);
+        try {
+            inst.timestamp = std::stoi(timestamp_content);
+        } catch (const std::invalid_argument &e) {
+            throw parser_error("Parser::parse error: Timestamp content '" + timestamp_content + "' in '" + token + "' is not a valid integer. " + e.what());
+        }
+
+        // 2. Parse Command Name
+        if (!(iss >> inst.command) || inst.command.empty()) {
+            throw parser_error("Parser::parse error: Missing or empty command name after timestamp.");
+        }
+
+        // 3. Parse Key-Value Arguments
+        // Loop expects pairs of: -key value -key value ...
+        std::string key_str;
+        std::string value_str;
+        while (iss >> key_str) {
+            // ! fix: there are weird cases when arguments start with -
+            if (key_str.length() < 2 || key_str[0] != '-') {
+                throw parser_error("Parser::parse error: Expected a key (e.g., -k) but got '" + key_str + "'.");
+            }
+            char key_char = key_str[1];
+
+            // The next token MUST be the value for this key.
+            if (!(iss >> value_str)) {
+                throw parser_error("Parser::parse error: Missing value for key '-" + std::string(1, key_char) + "' (parsed from key token '" + key_str + "').");
+            }
+            inst.kwargs.emplace_back(key_char, value_str);
+        }
+        return inst;
+    }
+};
 
     namespace detail_traits {
         // Primary template - left undefined. Instantiation means no specialization matched.

@@ -50,13 +50,14 @@ namespace norb {
     }
 
     inline auto make_supreme(const int &n, const impl::cmp_func_t<int> &cmp) {
-        // aim: retrieve the argmax for cmp (equivalent to make_sorted[0])
+        // aim: retrieve the argmin for cmp (equivalent to make_sorted[0])
+        // if cmp = std::less<>(), then make_supreme yields the minimum value
         if (n == 0) {
             return -1;
         }
         int idx = 0;
         for (int i = 1; i < n; ++i) {
-            if (cmp(idx, i)) {
+            if (cmp(i, idx)) {
                 idx = i;
             }
         }
@@ -70,10 +71,12 @@ namespace norb {
 
         SupremeKeep(const impl::cmp_func_t<T> &cmp_func) : cmp(cmp_func) {}
 
-        void add(const T &v) {
+        bool add(const T &v) {
             if (not val.has_value() or cmp(v, val.value())) {
                 val = v;
+                return true;
             }
+            return false;
         }
 
         auto get() const -> std::optional<T> {

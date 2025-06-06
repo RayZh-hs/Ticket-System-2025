@@ -67,7 +67,7 @@ namespace norb {
                 day = semantic_cast<int>(repr.substr(3, 2));
                 assert(month >= 1 && month <= 12);
                 if (month >= 1 && month <= 12) {
-                    assert(day >= 1 && day <= impl::DAYS_IN_MONTH_DATA[month]);
+                    assert((day >= 1 && day <= impl::DAYS_IN_MONTH_DATA[month]) || month == 2);
                 }
             }
 
@@ -225,7 +225,7 @@ namespace norb {
 
       public:
         Datetime(int m, int d, int h, int mn) {
-            if (m < 1 || m > 12 || d < 1 || (m >= 1 && m <= 12 && d > impl::DAYS_IN_MONTH_DATA[m]) || h < 0 || h > 23 ||
+            if (m < 1 || m > 12 || d < 1 || ((m >= 1 && m <= 12 && d > impl::DAYS_IN_MONTH_DATA[m]) && m != 2) || h < 0 || h > 23 ||
                 mn < 0 || mn > 59) {
                 throw std::out_of_range("Invalid date/time components for Datetime constructor");
             }
@@ -248,7 +248,7 @@ namespace norb {
 
             if (d_parsed.month < 1 || d_parsed.month > 12 || d_parsed.day < 1 ||
                 (d_parsed.month >= 1 && d_parsed.month <= 12 &&
-                 d_parsed.day > impl::DAYS_IN_MONTH_DATA[d_parsed.month]) ||
+                 (d_parsed.day > impl::DAYS_IN_MONTH_DATA[d_parsed.month] && d_parsed.month != 2)) ||
                 t_parsed.hour < 0 || t_parsed.hour > 23 || t_parsed.minute < 0 || t_parsed.minute > 59) {
                 throw std::out_of_range("Invalid date/time components from string for Datetime constructor");
             }

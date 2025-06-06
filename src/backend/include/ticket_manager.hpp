@@ -251,6 +251,7 @@ namespace ticket {
         }
 
         void register_order(const Order &order) {
+            interface::log.as(LogLevel::DEBUG) << "[TicketManager] Registering order: " << order.id() << '\n';
             if (purchase_history_store.count(order.id())) {
                 // this should not happen, unless timestamps are not unique
                 throw std::runtime_error("Order already exists.");
@@ -283,11 +284,20 @@ namespace ticket {
         void refund_order(Order order) {
             const auto order_id = order.id();
             purchase_history_store.remove(order_id, order);
-            if (order.status == Order::Status::Refunded) {
+            const auto ori_status = order.status;
+            interface::log.as(LogLevel::DEBUG) << "Encountered Order Status = " << order.status_string() << '\n';
+            if (ori_status == Order::Status::Refunded) {
                 throw std::runtime_error("Order already refunded.");
+            }
+            else if (ori_status == Order::Pending) {
+                // remove from the pending list
+                assert(pending_order_store.remove({order.train_id, order.purchase_timestamp}, order_id));
             }
             order.status = Order::Status::Refunded;
             purchase_history_store.insert(order_id, order);
+            if (ori_status == Order::Pending) {
+                return; // for originally pending orders, the seats should not be edited
+            }
             // update the number of remaining seats
             const auto train_status = get_train_status(order.train_id);
             if (not train_status.has_value()) {

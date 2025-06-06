@@ -63,7 +63,7 @@ namespace ticket {
             }
             int best_cursor = -1;
             const int train_count = train_query_result.size();
-            if (sort_by == "price") {
+            if (sort_by == "cost") {
                 best_cursor = norb::make_supreme(train_count, [&financial_info](const int &a, const int &b) {
                     return financial_info[a].price < financial_info[b].price;
                 });
@@ -113,7 +113,7 @@ namespace ticket {
                         << "Add user failed because user #" << cur_user_id << " is not logged in" << '\n';
                     return -1;
                 }
-                if (cur_user_account->privilege < privilege) {
+                if (cur_user_account->privilege <= privilege) {
                     global_interface::log.as(LogLevel::WARNING)
                         << "Add user failed because current user privilege " << cur_user_account->privilege
                         << "< required " << privilege << '\n';
@@ -457,21 +457,29 @@ namespace ticket {
             const auto &train_query_result = train_manager.query_ticket(from_id, to_id, Datetime(date), std::nullopt, true);
             // from ticket_manager retrieve the financial information
             norb::vector<TrainFareSegment> financial_info;
+            norb::vector<std::string> train_names;
             norb::vector<Datetime> duration;
             for (const auto &train_item : train_query_result) {
                 financial_info.push_back(ticket_manager.get_price_seat_for_section(
                     train_item.train_id, train_item.from_station_serial, train_item.to_station_serial));
                 duration.push_back((train_item.to_time - train_item.from_time));
+                train_names.push_back(train_manager.train_name_from_id(train_item.train_id.first).value());
             }
             norb::vector<int> sorted_indices;
             const int train_count = train_query_result.size();
-            if (sort_by == "price") {
-                sorted_indices = norb::make_sorted(train_count, [&financial_info](const int &a, const int &b) {
-                    return financial_info[a].price < financial_info[b].price;
+            if (sort_by == "cost") {
+                sorted_indices = norb::make_sorted(train_count, [&financial_info, &train_names](const int &a, const int &b) {
+                    if (financial_info[a].price != financial_info[b].price)
+                        return financial_info[a].price < financial_info[b].price;
+                    return train_names[a] < train_names[b];
                 });
             } else { // sort by time
                 sorted_indices = norb::make_sorted(
-                    train_count, [&duration](const int &a, const int &b) { return duration[a] < duration[b]; });
+                    train_count, [&duration, &train_names](const int &a, const int &b) {
+                        if (duration[a] != duration[b])
+                            return duration[a] < duration[b];
+                        return train_names[a] < train_names[b];
+                    });
             }
             norb::vector<TrainRideInfo> ret;
             // sort according to the sort_by parameter
@@ -709,6 +717,10 @@ namespace ticket {
                                             << order.to_time << ' '
                                             << order.price << ' '
                                             << order.count << '\n';
+                interface::log.as(LogLevel::DEBUG) << train_group_info->train_group_name << " registered at " << order.id() << '\n';
+                interface::log.as(LogLevel::DEBUG) << "From station " << from_station_name.value() << " to " << to_station_name.value() << " at " << order.from_time << '\n';
+                interface::log.as(LogLevel::DEBUG) << "Train ID: " << order.train_id << '\n';
+                interface::log.as(LogLevel::DEBUG) << "From #" << order.from_station_serial << " to #" << order.to_station_serial << '\n';
             }
         }
 

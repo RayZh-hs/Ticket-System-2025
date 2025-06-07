@@ -13,10 +13,11 @@ using ticket::TicketSystem;
 void register_commands(CommandRegistry &);
 
 int main() {
-    norb::chore::remove_associated();
-    std::freopen("../testcases/1867/2.in", "r", stdin);
+    // norb::chore::remove_associated();
+    // std::freopen("../testcases/1867/2.in", "r", stdin);
     // std::ofstream err_stream("../testcases/z.stderr.capture", std::ofstream::app);
     // std::cerr.rdbuf(err_stream.rdbuf());
+    // redirect from screen
     std::freopen("../testcases/nul", "a+", stderr);
 
     CommandRegistry cmdr;

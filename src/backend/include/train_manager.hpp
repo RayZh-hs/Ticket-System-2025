@@ -236,7 +236,7 @@ namespace ticket {
         // Get the FDD (First Departure Date) from a train group with the date when the train leaves at a given station
         Date deduce_departure_date_from(const TrainGroup &group_train_info, const int &station_serial,
                                         const Date &date_at_station) const {
-            const TrainGroupSegment &from_station_segment =
+            TrainGroupSegment from_station_segment =
                 train_group_segments.get(group_train_info.segment_pointer, station_serial);
             return date_at_station - from_station_segment.departure_time.to_days();
         }
@@ -285,7 +285,7 @@ namespace ticket {
         }
 
         std::optional<int> get_station_serial_from_id(const TrainGroup &train_group_info,
-                                                      const station_id_t &station_id) const {
+                                                      station_id_t station_id) const {
             const auto seg_ptr = train_group_info.segment_pointer;
             for (int i = 0; i < seg_ptr.size; ++i) {
                 if (train_group_segments.get(seg_ptr, i).station_id == station_id) {
@@ -295,11 +295,10 @@ namespace ticket {
             return std::nullopt; // Station not found in the train group
         }
 
-        std::optional<train_id_t> deduce_train_id_from(const train_group_id_t &train_group_id,
-                                                       const Date &departure_date_at_s,
-                                                       const station_id_t &from_station_id) const {
+        std::optional<train_id_t> deduce_train_id_from(const train_group_id_t train_group_id,
+                                                       const Date departure_date_at_s,
+                                                       const station_id_t from_station_id) const {
             const auto &train_group_info = train_group_store.find_first(train_group_id).value();
-            const auto seg_ptr = train_group_info.segment_pointer;
             std::optional<int> from_station_serial = get_station_serial_from_id(train_group_info, from_station_id);
             if (not from_station_serial.has_value()) {
                 interface::log.as(LogLevel::DEBUG)
@@ -366,7 +365,7 @@ namespace ticket {
                         continue; // Not available on this datetime
                     }
                 }
-                const auto &train_group_info =
+                const auto train_group_info =
                     train_group_store.find_first(candidate_train_group.train_group_id).value();
                 // done fix this (fixed)
                 Datetime::Date first_departure_date;

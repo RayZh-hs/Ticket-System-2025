@@ -705,15 +705,12 @@ class map {
             throw std::runtime_error("Corrupted tree structure");
         }
         return node->parent;
-    }
-
     // start from the node and traverse upwards, updating the height of each
     // node if a node's height is not changed, it exits if a node is found to be
     // unbalanced, it is corrected and the function also exits AVL asserts that
     // the change will restore the changed tree to its original height
     void balance_upstream(AVLNode *node) {
         while (node != nullptr) {
-            const int ori_height = node->height;
             if (std::abs(node->left_height() - node->right_height()) >= 2) {
                 balance_node(node);
                 // assert(replacement_node->height == ori_height); // this is

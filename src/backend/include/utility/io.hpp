@@ -5,7 +5,7 @@
 
 namespace ticket {
 
-    inline extern const char log_file_path[] = "/home/rayzh/learn/sjtu/acm/proj/Ticket-System-2025/testcases/z.latest.log";
+    inline extern const char log_file_path[] = "z.latest.log";
     inline auto verbose_logger = norb::Logger(log_file_path);
     inline auto no_logger = norb::NoLogger("");
 

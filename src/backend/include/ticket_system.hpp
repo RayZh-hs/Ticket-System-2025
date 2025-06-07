@@ -512,7 +512,6 @@ namespace ticket {
 
         static void query_transfer_and_print(const std::string &from, const std::string &to, const Date &date,
                                              const std::string &sort_by) {
-            auto &ticket_manager = get_instance().ticket_manager_;
             auto &train_manager = get_instance().train_manager_;
 
             const auto from_id = TrainManager::station_id_from_name(from);

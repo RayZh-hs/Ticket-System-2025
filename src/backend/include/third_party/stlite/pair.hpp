@@ -16,12 +16,6 @@ namespace norb {
   public:
     first_t_ first;
     second_t_ second;
-    Pair() = default;
-    Pair(first_t_ first, second_t_ second) : first(first), second(second) {}
-
-    Pair(const Pair &other) = default;
-    Pair(Pair &&other) = default;
-    Pair &operator=(const Pair &other) = default;
 
     auto operator<=>(const Pair &other) const requires IsComparable<second_t_> = default;
     bool operator==(const Pair &other) const requires IsComparable<second_t_> = default;

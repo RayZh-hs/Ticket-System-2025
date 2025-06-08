@@ -705,6 +705,7 @@ class map {
             throw std::runtime_error("Corrupted tree structure");
         }
         return node->parent;
+    }
     // start from the node and traverse upwards, updating the height of each
     // node if a node's height is not changed, it exits if a node is found to be
     // unbalanced, it is corrected and the function also exits AVL asserts that

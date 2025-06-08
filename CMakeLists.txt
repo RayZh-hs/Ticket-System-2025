@@ -8,9 +8,9 @@ include_directories(src/backend/include/third_party)
 
 # Main executable
 add_executable(code src/backend/main.cpp)
-target_compile_options(code PRIVATE -O2 -Wall -Wno-sign-compare)
-#target_compile_options(code PRIVATE -fsanitize=address)
-#target_link_options(code PRIVATE -fsanitize=address)
+# target_compile_options(code PRIVATE -O2 -Wall -Wno-sign-compare)
+# target_compile_options(code PRIVATE -fsanitize=address)
+# target_link_options(code PRIVATE -fsanitize=address)
 
 # Unit test executables
 file(GLOB UNIT_TEST_SOURCES src/backend/unit_test/*.cpp)
